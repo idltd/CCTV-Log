@@ -1,0 +1,24 @@
+{
+    "name": "CCTV SAR – Request Your Footage",
+    "short_name": "CCTV SAR",
+    "description": "Photograph a CCTV camera, identify the data controller, and draft a UK GDPR Subject Access Request for your footage.",
+    "start_url": "/",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#f3f4f6",
+    "theme_color": "#1a56db",
+    "icons": [
+        {
+            "src": "assets/icons/icon-192.svg",
+            "sizes": "192x192",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        },
+        {
+            "src": "assets/icons/icon-512.svg",
+            "sizes": "512x512",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        }
+    ]
+}

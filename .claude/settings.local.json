@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmd /c:*)",
+      "Bash(for dir in:*)",
+      "Bash(do)",
+      "Bash(echo:*)",
+      "Bash(cmd.exe /c:*)",
+      "Bash(done)"
+    ]
+  }
+}

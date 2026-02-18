@@ -1,0 +1,33 @@
+{
+    "version": "1",
+    "updated": "2026-02-18",
+    "note": "Sample data for local development. Live registry: https://github.com/idltd/cctv-sar-db",
+    "cameras": [
+        {
+            "id": "sample-001",
+            "lat": 51.50102,
+            "lng": -0.12445,
+            "location_desc": "Westminster Bridge Road, outside St Thomas' Hospital main entrance",
+            "operator": {
+                "name": "Guy's and St Thomas' NHS Foundation Trust",
+                "ico_reg": "Z5636970",
+                "privacy_email": "gstt.informationgovernance@nhs.net",
+                "postal_address": "Trust Headquarters, Gassiot House, St Thomas' Hospital, Westminster Bridge Road, London, SE1 7EH"
+            },
+            "added": "2026-02-18"
+        },
+        {
+            "id": "sample-002",
+            "lat": 51.50736,
+            "lng": -0.12750,
+            "location_desc": "Parliament Square, Westminster — TfL road network camera",
+            "operator": {
+                "name": "Transport for London",
+                "ico_reg": "Z7182020",
+                "privacy_email": "informationrequests@tfl.gov.uk",
+                "postal_address": "Transport for London, 5th Floor, Windsor House, 50 Victoria Street, London, SW1H 0TL"
+            },
+            "added": "2026-02-18"
+        }
+    ]
+}

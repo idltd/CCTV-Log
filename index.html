@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#1a56db">
+    <title>CCTV SAR</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="assets/icons/icon-192.svg">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header>
+    <div class="header-row">
+        <h1>CCTV SAR</h1>
+        <span class="header-sub">Request Your Footage</span>
+    </div>
+    <nav class="nav-buttons">
+        <button class="nav-btn active" data-section="home">Home</button>
+        <button class="nav-btn" data-section="request">New Request</button>
+        <button class="nav-btn" data-section="profile">My Details</button>
+        <button class="nav-btn" data-section="about">About</button>
+    </nav>
+</header>
+
+<main>
+
+    <!-- ══════════════════ HOME ══════════════════ -->
+    <section id="section-home" class="section">
+        <div class="hero">
+            <div class="hero-icon">📹</div>
+            <h2>Request Your CCTV Footage</h2>
+            <p>Under UK GDPR you have the right to request a copy of any CCTV footage
+               in which you appear. This tool identifies the camera owner and drafts a
+               legally correct Subject Access Request for you.</p>
+            <div class="hero-btns">
+                <button class="btn btn-primary btn-large btn-full" id="btn-start">
+                    Start a Request
+                </button>
+                <button class="btn btn-secondary btn-full" id="btn-go-profile">
+                    Set Up My Details First
+                </button>
+            </div>
+        </div>
+
+        <div class="info-cards">
+            <div class="card">
+                <strong>Your right</strong>
+                <p>Article 15 UK GDPR gives you the right to access personal data held
+                   about you — including CCTV footage captured in a public or semi-public place.</p>
+            </div>
+            <div class="card">
+                <strong>Act quickly</strong>
+                <p>CCTV footage is routinely overwritten within 7–31 days. The data controller
+                   must respond within <strong>one calendar month</strong> of your request,
+                   but the sooner you ask the better.</p>
+            </div>
+            <div class="card">
+                <strong>Free of charge</strong>
+                <p>Subject access requests are free unless they are manifestly unfounded
+                   or excessive. A specific, well-evidenced request for footage of yourself
+                   is neither.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ══════════════════ REQUEST WIZARD ══════════════════ -->
+    <section id="section-request" class="section hidden">
+
+        <!-- Step indicator -->
+        <div class="steps">
+            <div class="step active" data-step="0">
+                <div class="step-num">1</div>
+                <div class="step-label">Photo</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step" data-step="1">
+                <div class="step-num">2</div>
+                <div class="step-label">Camera</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step" data-step="2">
+                <div class="step-num">3</div>
+                <div class="step-label">Details</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step" data-step="3">
+                <div class="step-num">4</div>
+                <div class="step-label">Letter</div>
+            </div>
+        </div>
+
+        <!-- ── Step 0 : Photograph ── -->
+        <div class="step-panel" id="step-0">
+            <h2>Photograph the Camera</h2>
+            <p class="hint">
+                Point your phone at the CCTV camera — ideally its signage too.
+                Your location is captured at the same moment as timestamped evidence
+                that you were present and likely recorded.
+            </p>
+
+            <div class="photo-preview" id="photo-preview">
+                <div class="photo-placeholder">
+                    <span class="ph-icon">📷</span>
+                    <span>No photo taken yet</span>
+                </div>
+            </div>
+
+            <div class="step-actions">
+                <button class="btn btn-primary" id="btn-take-photo">Take Photo</button>
+            </div>
+
+            <div class="status-line hidden" id="gps-status"></div>
+
+            <div class="step-nav">
+                <span></span>
+                <button class="btn btn-primary" id="btn-step0-next" disabled>
+                    Next — Identify Camera →
+                </button>
+            </div>
+        </div>
+
+        <!-- ── Step 1 : Identify camera owner ── -->
+        <div class="step-panel hidden" id="step-1">
+            <h2>Who Owns This Camera?</h2>
+
+            <div id="registry-results" class="hint">
+                Searching registry…
+            </div>
+
+            <!-- Manual entry (collapsed by default) -->
+            <details class="disclosure" id="manual-details">
+                <summary>Enter details manually</summary>
+
+                <div class="form-group">
+                    <label for="manual-org">Organisation name *</label>
+                    <input type="text" id="manual-org"
+                           placeholder="e.g. Tesco Stores Ltd, City of London Corporation">
+                </div>
+                <div class="form-group">
+                    <label for="manual-ico">ICO registration number</label>
+                    <input type="text" id="manual-ico" placeholder="e.g. Z1234567">
+                </div>
+                <div class="form-group">
+                    <label for="manual-email">Privacy / DPO email</label>
+                    <input type="email" id="manual-email" placeholder="e.g. dpo@example.com">
+                </div>
+                <div class="form-group">
+                    <label for="manual-addr">Postal address</label>
+                    <textarea id="manual-addr" rows="3"
+                              placeholder="Address to which the SAR letter will be sent"></textarea>
+                </div>
+                <button class="btn btn-secondary" id="btn-use-manual">
+                    Use These Details
+                </button>
+            </details>
+
+            <div class="selected-info hidden" id="selected-info"></div>
+
+            <div class="step-nav">
+                <button class="btn btn-secondary" id="btn-step1-back">← Back</button>
+                <button class="btn btn-primary"   id="btn-step1-next" disabled>
+                    Next — Incident Details →
+                </button>
+            </div>
+        </div>
+
+        <!-- ── Step 2 : Incident details ── -->
+        <div class="step-panel hidden" id="step-2">
+            <h2>Incident Details</h2>
+            <p class="hint">
+                These help the data controller locate your footage quickly.
+                Date and time are pre-filled from your photo — adjust if needed.
+            </p>
+
+            <div class="form-group">
+                <label for="incident-date">Date</label>
+                <input type="date" id="incident-date">
+            </div>
+            <div class="form-group">
+                <label for="incident-time">Approximate time</label>
+                <input type="time" id="incident-time">
+                <small>The letter requests footage from 30 minutes before to 30 minutes after
+                       the time you enter.</small>
+            </div>
+            <div class="form-group">
+                <label for="self-description">Your appearance at the time</label>
+                <textarea id="self-description" rows="4"
+                          placeholder="e.g. Female, approximately 5 ft 5 in, wearing a red coat and dark jeans, carrying a green canvas bag. Short dark hair."></textarea>
+                <small>The more detail you give, the easier it is for the operator to locate
+                       the footage. Include height, build, clothing and any distinctive features.</small>
+            </div>
+
+            <div class="step-nav">
+                <button class="btn btn-secondary" id="btn-step2-back">← Back</button>
+                <button class="btn btn-primary"   id="btn-step2-next">
+                    Generate Letter →
+                </button>
+            </div>
+        </div>
+
+        <!-- ── Step 3 : Letter ── -->
+        <div class="step-panel hidden" id="step-3">
+            <h2>Your Letter</h2>
+            <p class="hint">
+                Review and edit the letter below. Your personal details are pre-filled from
+                <em>My Details</em> — you can change anything before sending.
+            </p>
+
+            <div class="form-group">
+                <label for="email-subject">Email subject line</label>
+                <input type="text" id="email-subject" readonly
+                       title="Click Copy Subject to copy this">
+            </div>
+
+            <div class="form-group">
+                <label for="letter-text">Letter body</label>
+                <textarea id="letter-text" spellcheck="true"></textarea>
+            </div>
+
+            <div class="send-options">
+                <button class="btn btn-primary"   id="btn-mailto">
+                    Open in Email App
+                </button>
+                <button class="btn btn-secondary" id="btn-copy-letter">
+                    Copy Letter
+                </button>
+                <button class="btn btn-secondary" id="btn-copy-subject">
+                    Copy Subject
+                </button>
+            </div>
+
+            <div class="status-line hidden" id="send-status"></div>
+
+            <!-- Contribute panel — hidden if no location/camera data -->
+            <details class="disclosure" id="contribute-panel">
+                <summary>Help others — contribute camera details to registry</summary>
+                <p class="hint" style="margin-top:8px">
+                    Share just the camera's location and operator details so others in the
+                    same situation can find them more quickly. No personal information is included.
+                    Contributions are reviewed before going live.
+                </p>
+                <pre class="contribute-preview" id="contribute-preview"></pre>
+                <button class="btn btn-secondary" id="btn-contribute">
+                    Submit via GitHub Issue
+                </button>
+                <div class="status-line hidden" id="contribute-status"></div>
+            </details>
+
+            <div class="step-nav">
+                <button class="btn btn-secondary" id="btn-step3-back">← Back</button>
+                <button class="btn btn-secondary" id="btn-new-request">New Request</button>
+            </div>
+        </div>
+
+    </section>
+
+    <!-- ══════════════════ PROFILE ══════════════════ -->
+    <section id="section-profile" class="section hidden">
+        <h2 style="margin-bottom:8px">My Details</h2>
+        <p class="hint">
+            Stored on this device only — never sent to any server.
+            These pre-fill the header of your SAR letter.
+            Leave anything blank and edit the letter manually.
+        </p>
+
+        <div class="form-group">
+            <label for="profile-name">Your name</label>
+            <input type="text" id="profile-name"
+                   placeholder="Name as it should appear on the letter">
+        </div>
+        <div class="form-group">
+            <label for="profile-address">Your address</label>
+            <textarea id="profile-address" rows="3"
+                      placeholder="Address for correspondence"></textarea>
+        </div>
+        <div class="form-group">
+            <label for="profile-email">Your email address</label>
+            <input type="email" id="profile-email" placeholder="you@example.com">
+        </div>
+
+        <button class="btn btn-primary" id="btn-save-profile">Save to Device</button>
+        <div class="status-line hidden" id="profile-saved"></div>
+    </section>
+
+    <!-- ══════════════════ ABOUT ══════════════════ -->
+    <section id="section-about" class="section hidden">
+
+        <div class="card" style="margin-bottom:10px">
+            <strong>Your rights</strong>
+            <p>Under the UK General Data Protection Regulation (UK GDPR) and the Data
+               Protection Act 2018, you have the right to request a copy of personal data
+               held about you — including CCTV footage. This is a Subject Access Request (SAR).</p>
+            <p>The data controller must respond within one calendar month and cannot charge
+               a fee for a standard SAR.</p>
+        </div>
+
+        <div class="card" style="margin-bottom:10px">
+            <strong>Privacy — your data stays on your device</strong>
+            <p>This app stores your name and address only on your phone.
+               Nothing is sent to any server by this app.
+               Your letter is sent by your own email client — your sent folder
+               is your record of the request.</p>
+            <p>The camera registry contains only factual, public-interest information
+               (location, operator name, ICO number) — no user data is ever stored there.</p>
+        </div>
+
+        <div class="card" style="margin-bottom:10px">
+            <strong>ICO — Information Commissioner's Office</strong>
+            <p>If a data controller ignores your request or refuses without good reason,
+               you can complain to the ICO. Most complaints are resolved within 90 days.</p>
+            <a class="btn btn-secondary"
+               href="https://ico.org.uk/make-a-complaint/"
+               target="_blank" rel="noopener">ICO Complaints</a>
+            <a class="btn btn-secondary"
+               href="https://ico.org.uk/for-organisations/guide-to-data-protection/guide-to-the-general-data-protection-regulation-gdpr/individual-rights/right-of-access/"
+               target="_blank" rel="noopener">ICO SAR Guidance</a>
+        </div>
+
+        <div class="card" style="margin-bottom:10px">
+            <strong>Camera Registry</strong>
+            <p>The shared registry is community-maintained on GitHub.
+               Submissions are reviewed before they go live.
+               No personal information is stored — only camera location and operator details.</p>
+            <a class="btn btn-secondary"
+               href="https://github.com/idltd/cctv-sar-db"
+               target="_blank" rel="noopener">View Registry on GitHub</a>
+        </div>
+
+        <div class="card">
+            <p class="muted" style="font-size:0.82em">
+                CCTV SAR v1.0 &middot; Built for UK users &middot; Not legal advice &middot;
+                <a href="https://ico.org.uk" target="_blank" rel="noopener">ico.org.uk</a>
+            </p>
+        </div>
+
+    </section>
+
+</main>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
