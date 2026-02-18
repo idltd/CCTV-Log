@@ -7,7 +7,7 @@
 // To use your own registry repo, update REGISTRY_URL below.
 
 const REGISTRY_URL =
-    'https://raw.githubusercontent.com/idltd/cctv-sar-db/main/cameras.json';
+    'https://raw.githubusercontent.com/idltd/cctv-sar-db/master/cameras.json';
 
 const CACHE_KEY = 'cctv_registry_v1';
 const CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours
