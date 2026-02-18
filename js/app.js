@@ -88,6 +88,8 @@ function initStep0() {
         showSection('request');
         showStep(1);
         searchRegistry();
+        // Allow saving to log immediately — camera selection is optional
+        document.getElementById('btn-save-to-log').disabled = false;
     };
 
     document.getElementById('btn-postcode-search').onclick = searchByPostcode;

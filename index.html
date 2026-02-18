@@ -150,6 +150,10 @@
         <!-- ── Step 1 : Identify camera owner ── -->
         <div class="step-panel hidden" id="step-1">
             <h2>Who Owns This Camera?</h2>
+            <p class="hint">
+                Tap a match from the registry, or <strong>Save to Log</strong> now
+                and identify the operator later.
+            </p>
 
             <div id="registry-results" class="hint">
                 Searching registry…
@@ -186,7 +190,8 @@
 
             <div class="step-nav">
                 <button class="btn btn-secondary" id="btn-step1-back">← Back</button>
-                <button class="btn btn-secondary" id="btn-save-to-log" disabled>
+                <button class="btn btn-secondary" id="btn-save-to-log" disabled
+                        title="Save this camera to your log to process later">
                     Save to Log
                 </button>
                 <button class="btn btn-primary"   id="btn-step1-next" disabled>
