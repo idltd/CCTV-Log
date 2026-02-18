@@ -1,5 +1,5 @@
 // Service Worker — cache-first strategy, offline capable
-const CACHE = 'cctv-sar-v1';
+const CACHE = 'cctv-sar-v2';
 
 const PRECACHE = [
     './',
@@ -12,6 +12,8 @@ const PRECACHE = [
     './js/registry.js',
     './js/sar.js',
     './js/storage.js',
+    './js/log.js',
+    './js/contacts.js',
     './assets/icons/icon-192.svg',
     './assets/icons/icon-512.svg',
 ];
