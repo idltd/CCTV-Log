@@ -151,8 +151,6 @@ async function searchRegistry() {
     const container = document.getElementById('registry-results');
     container.innerHTML = '<p class="hint">Searching registry…</p>';
 
-    await registry.load();
-
     if (!state.location) {
         container.innerHTML =
             '<p class="hint">No location set — enter a postcode on the previous step, ' +
@@ -160,7 +158,7 @@ async function searchRegistry() {
         return;
     }
 
-    const nearby = registry.nearby(state.location.lat, state.location.lng, 300);
+    const nearby = await registry.nearby(state.location.lat, state.location.lng, 300);
 
     if (nearby.length === 0) {
         container.innerHTML =
@@ -255,12 +253,12 @@ function initStep3() {
         setStatus('send-status', 'Subject line copied.', 'success');
     };
 
-    document.getElementById('btn-contribute').onclick = () => {
+    document.getElementById('btn-contribute').onclick = async () => {
         if (!state.selectedCamera || !state.location) {
             setStatus('contribute-status', 'No camera data to contribute.', 'warn');
             return;
         }
-        // Save locally so it appears in the user's own registry results
+        // Save locally so it appears in the user's own results immediately
         if (state.selectedCamera.manual) {
             registry.saveLocal({
                 ...state.selectedCamera,
@@ -269,11 +267,21 @@ function initStep3() {
                 location_desc: state.location.display || '',
             });
         }
-        // Open a pre-filled GitHub issue for community contribution
-        registry.openContributionIssue(state.selectedCamera, state.location);
-        setStatus('contribute-status',
-            'GitHub opened — your entry will appear after review. It has been saved locally for your next search.',
-            'success', 0);
+        // Submit directly to Supabase — no GitHub account needed
+        const btn = document.getElementById('btn-contribute');
+        btn.disabled = true;
+        try {
+            await registry.submitContribution(state.selectedCamera, state.location);
+            setStatus('contribute-status',
+                'Thank you — submitted for review. Saved locally for your next search.',
+                'success', 0);
+        } catch {
+            setStatus('contribute-status',
+                'Submission failed — saved locally only. Please try again later.',
+                'warn', 0);
+        } finally {
+            btn.disabled = false;
+        }
     };
 }
 
