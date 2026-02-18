@@ -114,6 +114,9 @@ async function captureGPS() {
             'Location unavailable — enter a postcode below to search the registry.',
             'warn', 0);
         document.getElementById('postcode-fallback').classList.remove('hidden');
+        // If the user already moved to step 1, refresh the registry UI so the
+        // inline postcode entry appears there too.
+        if (state.step === 1) searchRegistry();
     }
 }
 
@@ -177,9 +180,36 @@ async function searchRegistry() {
     container.innerHTML = '<p class="hint">Searching registry…</p>';
 
     if (!state.location) {
-        container.innerHTML =
-            '<p class="hint">No location set — enter a postcode on the previous step, ' +
-            'or enter the camera owner details manually below.</p>';
+        container.innerHTML = `
+            <p class="hint">GPS unavailable — enter the postcode where the camera is:</p>
+            <div class="postcode-row" style="margin:8px 0 4px">
+                <input type="text" id="step1-postcode" placeholder="e.g. SE1 7EH"
+                       maxlength="8" style="text-transform:uppercase">
+                <button class="btn btn-secondary" id="step1-postcode-btn">Search</button>
+            </div>
+            <p class="hint" style="margin-top:6px">Or enter details manually below.</p>`;
+
+        const btn = document.getElementById('step1-postcode-btn');
+        const doSearch = async () => {
+            const input = document.getElementById('step1-postcode');
+            const pc = input.value.trim();
+            if (!pc) return;
+            btn.disabled = true;
+            btn.textContent = 'Searching…';
+            try {
+                state.location = await loc.geocodePostcode(pc);
+                await searchRegistry();
+            } catch {
+                btn.disabled = false;
+                btn.textContent = 'Search';
+                container.insertAdjacentHTML('afterbegin',
+                    '<p class="hint" style="color:var(--error)">Postcode not found — try again.</p>');
+            }
+        };
+        btn.onclick = doSearch;
+        document.getElementById('step1-postcode').addEventListener('keydown', e => {
+            if (e.key === 'Enter') doSearch();
+        });
         return;
     }
 

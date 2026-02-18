@@ -281,10 +281,20 @@ main {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 20px;
+    margin-top: 12px;
     padding-top: 14px;
     border-top: 1px solid var(--border);
     gap: 10px;
+}
+.btn-save-log {
+    display: block;
+    width: 100%;
+    margin-top: 16px;
+    text-align: center;
+    border-style: dashed;
+}
+.btn-save-log:disabled {
+    opacity: 0.45;
 }
 .step-actions {
     display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0;
