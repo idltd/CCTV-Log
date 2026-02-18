@@ -20,7 +20,8 @@
     </div>
     <nav class="nav-buttons">
         <button class="nav-btn active" data-section="home">Home</button>
-        <button class="nav-btn" data-section="request">New Request</button>
+        <button class="nav-btn" data-section="request">Capture</button>
+        <button class="nav-btn" data-section="log">My Log</button>
         <button class="nav-btn" data-section="profile">My Details</button>
         <button class="nav-btn" data-section="about">About</button>
     </nav>
@@ -31,24 +32,14 @@
     <!-- ══════════════════ HOME ══════════════════ -->
     <section id="section-home" class="section">
 
-        <!-- Resume banner — shown only when a draft exists -->
-        <div class="resume-banner hidden" id="resume-banner">
-            <p>You have an unfinished request from <strong id="resume-date"></strong>.</p>
-            <div class="resume-btns">
-                <button class="btn btn-primary"   id="btn-resume">Resume</button>
-                <button class="btn btn-secondary" id="btn-discard">Discard</button>
-            </div>
-        </div>
-
         <div class="hero">
             <div class="hero-icon">📹</div>
             <h2>Request Your CCTV Footage</h2>
-            <p>Under UK GDPR you have the right to request a copy of any CCTV footage
-               in which you appear. This tool identifies the camera owner and drafts a
-               legally correct Subject Access Request for you.</p>
+            <p>Photograph a CCTV camera, identify the operator, and send a legally correct
+               Subject Access Request — all from your phone.</p>
             <div class="hero-btns">
-                <button class="btn btn-primary btn-large btn-full" id="btn-start">
-                    Start a Request
+                <button class="btn btn-primary btn-large btn-full" id="btn-capture">
+                    📷 Capture Incident
                 </button>
                 <button class="btn btn-secondary btn-full" id="btn-go-profile">
                     Set Up My Details First
@@ -56,25 +47,33 @@
             </div>
         </div>
 
-        <div class="info-cards">
-            <div class="card">
-                <strong>Your right</strong>
-                <p>Article 15 UK GDPR gives you the right to access personal data held
-                   about you — including CCTV footage captured in a public or semi-public place.</p>
-            </div>
-            <div class="card">
-                <strong>Act quickly</strong>
-                <p>CCTV footage is routinely overwritten within 7–31 days. The data controller
-                   must respond within <strong>one calendar month</strong> of your request,
-                   but the sooner you ask the better.</p>
-            </div>
-            <div class="card">
-                <strong>Free of charge</strong>
-                <p>Subject access requests are free unless they are manifestly unfounded
-                   or excessive. A specific, well-evidenced request for footage of yourself
-                   is neither.</p>
-            </div>
+        <!-- Log summary — hidden when log is empty -->
+        <div class="log-summary hidden" id="home-log-summary">
+            <strong id="home-pending-count">0</strong> pending ·
+            <strong id="home-sent-count">0</strong> sent —
+            <a href="#" id="home-view-log">view My Log</a>
         </div>
+
+        <details class="disclosure" style="margin-bottom:8px">
+            <summary>About this app</summary>
+            <div class="info-cards" style="margin-top:8px">
+                <div class="card">
+                    <strong>Your right</strong>
+                    <p>Article 15 UK GDPR gives you the right to access personal data held
+                       about you — including CCTV footage captured in a public or semi-public place.</p>
+                </div>
+                <div class="card">
+                    <strong>Act quickly</strong>
+                    <p>CCTV footage is routinely overwritten within 7–31 days. The data controller
+                       must respond within <strong>one calendar month</strong> of your request.</p>
+                </div>
+                <div class="card">
+                    <strong>Free of charge</strong>
+                    <p>Subject access requests are free unless they are manifestly unfounded
+                       or excessive.</p>
+                </div>
+            </div>
+        </details>
     </section>
 
     <!-- ══════════════════ REQUEST WIZARD ══════════════════ -->
@@ -187,8 +186,11 @@
 
             <div class="step-nav">
                 <button class="btn btn-secondary" id="btn-step1-back">← Back</button>
+                <button class="btn btn-secondary" id="btn-save-to-log" disabled>
+                    Save to Log
+                </button>
                 <button class="btn btn-primary"   id="btn-step1-next" disabled>
-                    Next — Incident Details →
+                    Next →
                 </button>
             </div>
         </div>
@@ -246,6 +248,9 @@
                 <textarea id="letter-text" spellcheck="true"></textarea>
             </div>
 
+            <!-- Warning shown if same operator contacted recently -->
+            <div class="sar-warning hidden" id="sar-warning"></div>
+
             <div class="send-options">
                 <button class="btn btn-primary"   id="btn-mailto">
                     Open in Email App
@@ -260,6 +265,13 @@
 
             <div class="status-line hidden" id="send-status"></div>
 
+            <!-- Mark as sent — user clicks after sending from their email app -->
+            <button class="btn btn-secondary btn-full" id="btn-mark-sent"
+                    style="margin-top:10px">
+                ✓ Mark as Sent
+            </button>
+            <div class="status-line hidden" id="sent-status"></div>
+
             <!-- Contribute panel — hidden if no location/camera data -->
             <details class="disclosure" id="contribute-panel">
                 <summary>Help others — contribute camera details to registry</summary>
@@ -270,17 +282,32 @@
                 </p>
                 <pre class="contribute-preview" id="contribute-preview"></pre>
                 <button class="btn btn-secondary" id="btn-contribute">
-                    Submit via GitHub Issue
+                    Submit to Registry
                 </button>
                 <div class="status-line hidden" id="contribute-status"></div>
             </details>
 
             <div class="step-nav">
                 <button class="btn btn-secondary" id="btn-step3-back">← Back</button>
-                <button class="btn btn-secondary" id="btn-new-request">New Request</button>
+                <button class="btn btn-secondary" id="btn-new-request">New Capture</button>
             </div>
         </div>
 
+    </section>
+
+    <!-- ══════════════════ MY LOG ══════════════════ -->
+    <section id="section-log" class="section hidden">
+        <h2 style="margin-bottom:12px">My Log</h2>
+
+        <div id="log-empty" class="hidden">
+            <div class="empty-icon">📋</div>
+            <p>No incidents captured yet.</p>
+            <p class="hint" style="margin-top:6px">
+                Tap <strong>Capture Incident</strong> on the Home tab when you spot a CCTV camera.
+            </p>
+        </div>
+
+        <div id="log-list"></div>
     </section>
 
     <!-- ══════════════════ PROFILE ══════════════════ -->
@@ -406,6 +433,9 @@
     </section>
 
 </main>
+
+<!-- Hidden canvas for thumbnail generation -->
+<canvas id="thumb-canvas" style="display:none" width="320" height="240"></canvas>
 
 <script type="module" src="js/app.js"></script>
 </body>

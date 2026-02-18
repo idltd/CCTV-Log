@@ -1,17 +1,20 @@
 // app.js — main controller for CCTV SAR PWA
-import { camera }                    from './camera.js';
-import { loc }                       from './location.js';
-import { registry }                  from './registry.js';
+import { camera }                        from './camera.js';
+import { loc }                           from './location.js';
+import { registry }                      from './registry.js';
 import { generateLetter, getSubjectLine } from './sar.js';
-import { storage }                   from './storage.js';
+import { storage }                       from './storage.js';
+import { incidentLog }                   from './log.js';
+import { operatorKey, recordSARSent, getRecentSAR } from './contacts.js';
 
 // ── State ──────────────────────────────────────────────────────────────────────
 const state = {
-    section:        'home',
-    step:           0,
-    photo:          null,   // { data: base64, time: Date }
-    location:       null,   // { lat, lng, accuracy, display, road, postcode, town }
-    selectedCamera: null,   // camera object from registry or manual entry
+    section:           'home',
+    step:              0,
+    photo:             null,    // { data: base64, time: Date }
+    location:          null,    // { lat, lng, accuracy, display, road, postcode, town }
+    selectedCamera:    null,    // camera object from registry or manual entry
+    currentIncidentId: null,    // set when editing an existing incident from My Log
 };
 
 // ── Navigation ─────────────────────────────────────────────────────────────────
@@ -34,6 +37,25 @@ function showStep(n) {
     state.step = n;
 }
 
+// ── Thumbnail generation ───────────────────────────────────────────────────────
+function generateThumbnail(base64) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.getElementById('thumb-canvas');
+            const maxW = 320;
+            const scale = Math.min(1, maxW / img.width);
+            canvas.width  = Math.round(img.width  * scale);
+            canvas.height = Math.round(img.height * scale);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', 0.5));
+        };
+        img.onerror = () => resolve(null);
+        img.src = base64;
+    });
+}
+
 // ── Step 0 : Photograph the camera ────────────────────────────────────────────
 function initStep0() {
     const btnPhoto = document.getElementById('btn-take-photo');
@@ -50,7 +72,7 @@ function initStep0() {
             preview.innerHTML =
                 `<img src="${result.data}" alt="Photo of CCTV camera">`;
 
-            // Start GPS acquisition in parallel — results shown below photo
+            // Start GPS acquisition in parallel
             captureGPS();
             btnNext.disabled = false;
         } catch (e) {
@@ -108,7 +130,6 @@ async function searchByPostcode() {
         state.location = result;
         setStatus('gps-status', `Location: Near ${postcode.toUpperCase()}`, 'success', 0);
         document.getElementById('postcode-fallback').classList.add('hidden');
-        // Re-run registry search with the new location if already on step 1
         if (state.step === 1) searchRegistry();
     } catch (e) {
         setStatus('gps-status', 'Postcode not found — try a different postcode.', 'warn', 0);
@@ -127,9 +148,9 @@ function initStep1() {
         if (!org) { alert('Please enter an organisation name.'); return; }
 
         selectCamera({
-            id:           'manual',
-            lat:          state.location?.lat,
-            lng:          state.location?.lng,
+            id:            'manual',
+            lat:           state.location?.lat,
+            lng:           state.location?.lng,
             location_desc: state.location?.display || '',
             operator: {
                 name:           org,
@@ -145,6 +166,8 @@ function initStep1() {
         prefillIncidentDateTime();
         showStep(2);
     };
+
+    document.getElementById('btn-save-to-log').onclick = () => saveCaptureToLog();
 }
 
 async function searchRegistry() {
@@ -179,8 +202,8 @@ async function searchRegistry() {
                ${c.operator.ico_reg ? ' &middot; ICO: ' + c.operator.ico_reg : ''}
                ${c.local ? ' &middot; <em>your entry</em>' : ''}
              </div>`;
-        el.onclick    = () => selectCamera(c, el);
-        el.onkeydown  = e => { if (e.key === 'Enter' || e.key === ' ') selectCamera(c, el); };
+        el.onclick   = () => selectCamera(c, el);
+        el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') selectCamera(c, el); };
         container.appendChild(el);
     });
 }
@@ -198,8 +221,8 @@ function selectCamera(cam, el) {
         (cam.location_desc        ? `<br>${cam.location_desc}`                   : '');
     info.classList.remove('hidden');
 
-    document.getElementById('btn-step1-next').disabled = false;
-    saveWizardState();
+    document.getElementById('btn-step1-next').disabled    = false;
+    document.getElementById('btn-save-to-log').disabled   = false;
 }
 
 function prefillIncidentDateTime() {
@@ -216,13 +239,6 @@ function initStep2() {
         buildAndShowLetter();
         showStep(3);
     };
-
-    // Auto-save description as user types (debounced)
-    let descTimer;
-    document.getElementById('self-description').addEventListener('input', () => {
-        clearTimeout(descTimer);
-        descTimer = setTimeout(saveWizardState, 1000);
-    });
 }
 
 // ── Step 3 : Letter ────────────────────────────────────────────────────────────
@@ -238,7 +254,6 @@ function initStep3() {
         const to      = state.selectedCamera?.operator?.privacy_email || '';
         const subject = document.getElementById('email-subject').value;
         const body    = document.getElementById('letter-text').value;
-        // mailto: uses user's own email app — no data passes through any server
         window.location.href =
             `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     };
@@ -253,21 +268,21 @@ function initStep3() {
         setStatus('send-status', 'Subject line copied.', 'success');
     };
 
+    document.getElementById('btn-mark-sent').onclick = () => markIncidentSent();
+
     document.getElementById('btn-contribute').onclick = async () => {
         if (!state.selectedCamera || !state.location) {
             setStatus('contribute-status', 'No camera data to contribute.', 'warn');
             return;
         }
-        // Save locally so it appears in the user's own results immediately
         if (state.selectedCamera.manual) {
             registry.saveLocal({
                 ...state.selectedCamera,
-                lat: state.location.lat,
-                lng: state.location.lng,
+                lat:           state.location.lat,
+                lng:           state.location.lng,
                 location_desc: state.location.display || '',
             });
         }
-        // Submit directly to Supabase — no GitHub account needed
         const btn = document.getElementById('btn-contribute');
         btn.disabled = true;
         try {
@@ -286,7 +301,7 @@ function initStep3() {
 }
 
 function buildAndShowLetter() {
-    const profile = storage.getProfile();
+    const profile      = storage.getProfile();
     const incidentTime = readIncidentDateTime();
     const description  = document.getElementById('self-description').value;
 
@@ -295,10 +310,18 @@ function buildAndShowLetter() {
     const subject = getSubjectLine({ camera: state.selectedCamera,
         location: state.location, incidentTime, photoTime: state.photo?.time });
 
-    document.getElementById('letter-text').value    = text;
-    document.getElementById('email-subject').value  = subject;
+    document.getElementById('letter-text').value   = text;
+    document.getElementById('email-subject').value = subject;
     storage.saveDraft(text);
-    saveWizardState();
+
+    // If we're reviewing an existing incident, update its letter
+    if (state.currentIncidentId) {
+        incidentLog.update(state.currentIncidentId, { letterText: text, subjectLine: subject })
+            .catch(() => {});
+    }
+
+    // SAR warning check
+    checkSARWarning(state.selectedCamera);
 
     // Show contribute panel only when we have usable data
     const hasGoodData = state.selectedCamera && state.location?.lat;
@@ -322,11 +345,231 @@ function readIncidentDateTime() {
     return isNaN(dt) ? (state.photo?.time || null) : dt;
 }
 
+function checkSARWarning(cam) {
+    const warning = document.getElementById('sar-warning');
+    if (!cam) { warning.classList.add('hidden'); return; }
+
+    const key    = operatorKey(cam);
+    const recent = getRecentSAR(key);
+    if (!recent) { warning.classList.add('hidden'); return; }
+
+    warning.textContent =
+        `You sent a SAR to ${recent.operatorName} ${recent.daysSince} day${recent.daysSince === 1 ? '' : 's'} ago ` +
+        `(${recent.count} total). Operators can treat repeat requests within a short period ` +
+        `as excessive under UK GDPR Article 12(5). Only proceed if the previous request ` +
+        `was not resolved.`;
+    warning.classList.remove('hidden');
+}
+
+// ── Log: save current capture ──────────────────────────────────────────────────
+async function saveCaptureToLog() {
+    const btn = document.getElementById('btn-save-to-log');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    try {
+        const thumbnail = state.photo?.data
+            ? await generateThumbnail(state.photo.data)
+            : null;
+
+        const now = state.photo?.time || new Date();
+        const incident = {
+            capturedAt:      now.toISOString(),
+            thumbnail,
+            lat:             state.location?.lat || null,
+            lng:             state.location?.lng || null,
+            locationDisplay: state.location?.display || state.location?.road || '',
+            camera:          state.selectedCamera,
+            incidentDate:    now.toISOString().slice(0, 10),
+            incidentTime:    now.toTimeString().slice(0, 5),
+            selfDescription: '',
+            status:          'captured',
+        };
+
+        await incidentLog.add(incident);
+        await updateHomeSummary();
+
+        setStatus('gps-status', 'Saved to My Log!', 'success', 3000);
+
+        resetWizard();
+        showSection('home');
+    } catch (e) {
+        setStatus('gps-status', 'Could not save: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save to Log';
+    }
+}
+
+// ── Log: mark sent ─────────────────────────────────────────────────────────────
+async function markIncidentSent() {
+    const letterText  = document.getElementById('letter-text').value;
+    const subjectLine = document.getElementById('email-subject').value;
+    const cam         = state.selectedCamera;
+
+    // Record to contact log
+    if (cam) {
+        const key  = operatorKey(cam);
+        const name = cam.operator?.name || key;
+        recordSARSent(key, name);
+    }
+
+    // If editing an existing incident, update it
+    if (state.currentIncidentId) {
+        await incidentLog.update(state.currentIncidentId, {
+            status:      'sent',
+            sarSentAt:   new Date().toISOString(),
+            letterText,
+            subjectLine,
+        }).catch(() => {});
+    } else {
+        // Create a new incident record for this immediate send
+        const thumbnail = state.photo?.data
+            ? await generateThumbnail(state.photo.data)
+            : null;
+        const now = state.photo?.time || new Date();
+        await incidentLog.add({
+            capturedAt:      now.toISOString(),
+            thumbnail,
+            lat:             state.location?.lat || null,
+            lng:             state.location?.lng || null,
+            locationDisplay: state.location?.display || '',
+            camera:          cam,
+            incidentDate:    document.getElementById('incident-date').value,
+            incidentTime:    document.getElementById('incident-time').value,
+            selfDescription: document.getElementById('self-description').value,
+            status:          'sent',
+            sarSentAt:       new Date().toISOString(),
+            letterText,
+            subjectLine,
+        }).catch(() => {});
+    }
+
+    await updateHomeSummary();
+
+    setStatus('sent-status', 'Marked as sent — saved to My Log.', 'success', 0);
+    document.getElementById('btn-mark-sent').disabled = true;
+    document.getElementById('btn-mark-sent').textContent = '✓ Sent';
+}
+
+// ── Log: render list ───────────────────────────────────────────────────────────
+async function initLog() {
+    const incidents = await incidentLog.getAll();
+    renderIncidentList(incidents);
+}
+
+function renderIncidentList(incidents) {
+    const list  = document.getElementById('log-list');
+    const empty = document.getElementById('log-empty');
+
+    list.innerHTML = '';
+
+    if (incidents.length === 0) {
+        empty.classList.remove('hidden');
+        return;
+    }
+    empty.classList.add('hidden');
+
+    incidents.forEach(inc => {
+        const opName  = inc.camera?.operator?.name || 'Unknown operator';
+        const locText = inc.locationDisplay || 'Location unknown';
+        const timeStr = relativeTime(inc.capturedAt);
+        const isPending = inc.status === 'captured';
+
+        const card = document.createElement('div');
+        card.className = 'incident-item';
+        card.innerHTML = `
+            <div class="incident-thumb">
+                ${inc.thumbnail
+                    ? `<img src="${inc.thumbnail}" alt="CCTV camera photo">`
+                    : '📷'}
+            </div>
+            <div class="incident-body">
+                <div class="incident-op">${escHtml(opName)}</div>
+                <div class="incident-loc">${escHtml(locText)}</div>
+                <div class="incident-meta">
+                    <span class="badge ${isPending ? 'badge-captured' : 'badge-sent'}">
+                        ${isPending ? 'Pending' : 'Sent ✓'}
+                    </span>
+                    <span style="font-size:0.78em;color:var(--muted)">${escHtml(timeStr)}</span>
+                </div>
+            </div>
+            <div class="incident-actions">
+                ${isPending
+                    ? `<button class="btn btn-primary" data-id="${inc.id}">Process →</button>`
+                    : `<button class="btn btn-secondary" data-id="${inc.id}">View</button>`}
+                <button class="btn btn-secondary btn-delete" data-id="${inc.id}"
+                        style="color:var(--error-text)">Delete</button>
+            </div>`;
+
+        card.querySelector(isPending ? '.btn-primary' : '.btn-secondary:not(.btn-delete)')
+            .onclick = () => openIncidentForProcessing(inc.id);
+
+        card.querySelector('.btn-delete').onclick = async () => {
+            if (!confirm(`Delete this incident (${opName})?`)) return;
+            await incidentLog.remove(inc.id);
+            await updateHomeSummary();
+            await initLog();
+        };
+
+        list.appendChild(card);
+    });
+}
+
+async function openIncidentForProcessing(id) {
+    const inc = await incidentLog.get(id);
+    if (!inc) return;
+
+    state.currentIncidentId = id;
+    state.selectedCamera    = inc.camera || null;
+    state.location          = inc.camera
+        ? { lat: inc.lat, lng: inc.lng, display: inc.locationDisplay }
+        : null;
+    state.photo = inc.capturedAt
+        ? { data: inc.thumbnail, time: new Date(inc.capturedAt) }
+        : null;
+
+    // Restore step-2 fields
+    if (inc.incidentDate) document.getElementById('incident-date').value  = inc.incidentDate;
+    if (inc.incidentTime) document.getElementById('incident-time').value  = inc.incidentTime;
+    if (inc.selfDescription) document.getElementById('self-description').value = inc.selfDescription;
+
+    // Restore step-1 display
+    if (inc.camera) selectCamera(inc.camera, null);
+
+    // Restore letter if it was already generated
+    if (inc.letterText) {
+        document.getElementById('letter-text').value   = inc.letterText;
+        document.getElementById('email-subject').value = inc.subjectLine || '';
+        checkSARWarning(inc.camera);
+        showSection('request');
+        showStep(3);
+    } else {
+        showSection('request');
+        showStep(2);
+    }
+}
+
+// ── Home: log summary strip ────────────────────────────────────────────────────
+async function updateHomeSummary() {
+    const counts  = await incidentLog.counts();
+    const summary = document.getElementById('home-log-summary');
+    if (counts.total === 0) {
+        summary.classList.add('hidden');
+    } else {
+        document.getElementById('home-pending-count').textContent = counts.captured;
+        document.getElementById('home-sent-count').textContent    = counts.sent;
+        summary.classList.remove('hidden');
+    }
+}
+
+// ── Wizard reset ───────────────────────────────────────────────────────────────
 function resetWizard() {
     camera.clear();
-    state.photo          = null;
-    state.location       = null;
-    state.selectedCamera = null;
+    state.photo             = null;
+    state.location          = null;
+    state.selectedCamera    = null;
+    state.currentIncidentId = null;
 
     storage.clearWizardState();
 
@@ -343,13 +586,17 @@ function resetWizard() {
     document.getElementById('registry-results').innerHTML  = '';
     document.getElementById('selected-info').classList.add('hidden');
     document.getElementById('btn-step1-next').disabled     = true;
+    document.getElementById('btn-save-to-log').disabled    = true;
     document.getElementById('self-description').value      = '';
     document.getElementById('incident-date').value         = '';
     document.getElementById('incident-time').value         = '';
     document.getElementById('letter-text').value           = '';
     document.getElementById('contribute-status').className = 'status-line hidden';
+    document.getElementById('sar-warning').classList.add('hidden');
+    document.getElementById('btn-mark-sent').disabled      = false;
+    document.getElementById('btn-mark-sent').textContent   = '✓ Mark as Sent';
+    document.getElementById('sent-status').className       = 'status-line hidden';
 
-    // Clear manual entry
     ['manual-org','manual-ico','manual-email','manual-addr'].forEach(id => {
         document.getElementById(id).value = '';
     });
@@ -357,107 +604,8 @@ function resetWizard() {
     showStep(0);
 }
 
-// ── Draft persistence ──────────────────────────────────────────────────────────
-const WIZARD_STATE_TTL = 24 * 60 * 60 * 1000; // 24 hours
-
-function saveWizardState() {
-    const incidentDate = document.getElementById('incident-date').value;
-    const incidentTime = document.getElementById('incident-time').value;
-    const selfDesc     = document.getElementById('self-description').value;
-    const letterText   = document.getElementById('letter-text').value;
-
-    storage.saveWizardState({
-        step:           state.step,
-        photoTime:      state.photo?.time?.toISOString() || null,
-        location:       state.location,
-        selectedCamera: state.selectedCamera,
-        incidentDate,
-        incidentTime,
-        selfDescription: selfDesc,
-        letterText,
-        saved:          Date.now(),
-    });
-}
-
-function tryRestoreWizardState() {
-    const saved = storage.getWizardState();
-    if (!saved) return;
-    if (Date.now() - saved.saved > WIZARD_STATE_TTL) {
-        storage.clearWizardState();
-        return;
-    }
-
-    const banner = document.getElementById('resume-banner');
-    const d = new Date(saved.saved);
-    const label = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-        + ' at ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    document.getElementById('resume-date').textContent = label;
-    banner.classList.remove('hidden');
-
-    document.getElementById('btn-resume').onclick = () => {
-        banner.classList.add('hidden');
-        restoreWizardState(saved);
-        showSection('request');
-    };
-
-    document.getElementById('btn-discard').onclick = () => {
-        storage.clearWizardState();
-        banner.classList.add('hidden');
-    };
-}
-
-function restoreWizardState(saved) {
-    // Restore state object
-    state.location       = saved.location || null;
-    state.selectedCamera = saved.selectedCamera || null;
-    state.photo = saved.photoTime
-        ? { data: null, time: new Date(saved.photoTime) }
-        : null;
-
-    // Restore form fields
-    if (saved.incidentDate)
-        document.getElementById('incident-date').value = saved.incidentDate;
-    if (saved.incidentTime)
-        document.getElementById('incident-time').value = saved.incidentTime;
-    if (saved.selfDescription)
-        document.getElementById('self-description').value = saved.selfDescription;
-    if (saved.letterText) {
-        document.getElementById('letter-text').value = saved.letterText;
-        // Rebuild subject from stored letter
-        const subject = getSubjectLine({
-            camera: state.selectedCamera,
-            location: state.location,
-            incidentTime: saved.incidentDate
-                ? new Date(`${saved.incidentDate}T${saved.incidentTime || '00:00'}`)
-                : null,
-            photoTime: state.photo?.time,
-        });
-        document.getElementById('email-subject').value = subject;
-    }
-
-    // Restore selected camera display
-    if (state.selectedCamera) {
-        selectCamera(state.selectedCamera, null);
-    }
-
-    // Navigate to saved step (but not further than step 3)
-    const targetStep = Math.min(saved.step || 0, 3);
-    showStep(targetStep);
-
-    // If we're on step 1, run registry search with restored location
-    if (targetStep <= 1 && state.location) searchRegistry();
-
-    // Note about photo
-    if (targetStep > 0 && !saved.letterText) {
-        setStatus('gps-status',
-            'Request restored — retake the photo to update the timestamp if needed.',
-            'info', 8000);
-    }
-}
-
 // ── Profile ────────────────────────────────────────────────────────────────────
 function initProfile() {
-    // Load saved values whenever the section becomes visible
     document.querySelectorAll('.nav-btn').forEach(b => {
         if (b.dataset.section === 'profile') {
             b.addEventListener('click', loadProfileFields);
@@ -486,7 +634,6 @@ async function copyText(text) {
     try {
         await navigator.clipboard.writeText(text);
     } catch {
-        // Fallback for browsers that block clipboard without HTTPS
         const ta = Object.assign(document.createElement('textarea'), {
             value: text, style: 'position:fixed;opacity:0',
         });
@@ -505,18 +652,56 @@ function setStatus(id, message, type = 'info', timeout = 4000) {
     if (timeout > 0) setTimeout(() => el.classList.add('hidden'), timeout);
 }
 
+function relativeTime(isoString) {
+    const d    = new Date(isoString);
+    const now  = new Date();
+    const diff = now - d;
+    const mins  = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days  = Math.floor(diff / 86400000);
+
+    if (mins < 2)   return 'Just now';
+    if (mins < 60)  return `${mins} min ago`;
+    if (hours < 24) {
+        const t = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        return `Today ${t}`;
+    }
+    if (days === 1) return 'Yesterday';
+    if (days < 7)   return `${days} days ago`;
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function escHtml(s) {
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
 // ── Bootstrap ──────────────────────────────────────────────────────────────────
-function init() {
+async function init() {
     // Top nav
     document.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.onclick = () => {
+        btn.onclick = async () => {
             showSection(btn.dataset.section);
             if (btn.dataset.section === 'request') showStep(state.step);
+            if (btn.dataset.section === 'log') {
+                await initLog();
+            }
         };
     });
 
-    document.getElementById('btn-start').onclick      = () => { showSection('request'); showStep(0); };
+    // Home buttons
+    document.getElementById('btn-capture').onclick    = () => { showSection('request'); showStep(0); };
     document.getElementById('btn-go-profile').onclick = () => showSection('profile');
+    document.getElementById('home-view-log').onclick  = async e => {
+        e.preventDefault();
+        showSection('log');
+        document.querySelectorAll('.nav-btn').forEach(b =>
+            b.classList.toggle('active', b.dataset.section === 'log'));
+        await initLog();
+    };
 
     initStep0();
     initStep1();
@@ -528,8 +713,8 @@ function init() {
     showSection('home');
     showStep(0);
 
-    // Check for a resumable draft
-    tryRestoreWizardState();
+    // Load log counts for home summary
+    await updateHomeSummary();
 
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./sw.js').catch(() => {});
