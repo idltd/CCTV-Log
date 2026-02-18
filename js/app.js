@@ -67,10 +67,14 @@ function initStep0() {
         showStep(1);
         searchRegistry();
     };
+
+    document.getElementById('btn-postcode-search').onclick = searchByPostcode;
+    document.getElementById('postcode-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') searchByPostcode();
+    });
 }
 
 async function captureGPS() {
-    const el = document.getElementById('gps-status');
     setStatus('gps-status', 'Getting your location…', 'info', 0);
 
     try {
@@ -80,10 +84,37 @@ async function captureGPS() {
         const label = address.road || address.town || address.display;
         setStatus('gps-status',
             `Location: ${label} (±${coords.accuracy}m)`, 'success', 0);
+        document.getElementById('postcode-fallback').classList.add('hidden');
     } catch (e) {
         setStatus('gps-status',
-            'Location unavailable — you can enter the camera details manually.',
+            'Location unavailable — enter a postcode below to search the registry.',
             'warn', 0);
+        document.getElementById('postcode-fallback').classList.remove('hidden');
+    }
+}
+
+async function searchByPostcode() {
+    const input    = document.getElementById('postcode-input');
+    const postcode = input.value.trim();
+    if (!postcode) return;
+
+    const btn = document.getElementById('btn-postcode-search');
+    btn.disabled = true;
+    btn.textContent = 'Searching…';
+    setStatus('gps-status', `Looking up ${postcode.toUpperCase()}…`, 'info', 0);
+
+    try {
+        const result = await loc.geocodePostcode(postcode);
+        state.location = result;
+        setStatus('gps-status', `Location: Near ${postcode.toUpperCase()}`, 'success', 0);
+        document.getElementById('postcode-fallback').classList.add('hidden');
+        // Re-run registry search with the new location if already on step 1
+        if (state.step === 1) searchRegistry();
+    } catch (e) {
+        setStatus('gps-status', 'Postcode not found — try a different postcode.', 'warn', 0);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Search';
     }
 }
 
@@ -124,7 +155,8 @@ async function searchRegistry() {
 
     if (!state.location) {
         container.innerHTML =
-            '<p class="hint">No GPS location — enter the camera owner details manually below.</p>';
+            '<p class="hint">No location set — enter a postcode on the previous step, ' +
+            'or enter the camera owner details manually below.</p>';
         return;
     }
 
@@ -169,6 +201,7 @@ function selectCamera(cam, el) {
     info.classList.remove('hidden');
 
     document.getElementById('btn-step1-next').disabled = false;
+    saveWizardState();
 }
 
 function prefillIncidentDateTime() {
@@ -185,6 +218,13 @@ function initStep2() {
         buildAndShowLetter();
         showStep(3);
     };
+
+    // Auto-save description as user types (debounced)
+    let descTimer;
+    document.getElementById('self-description').addEventListener('input', () => {
+        clearTimeout(descTimer);
+        descTimer = setTimeout(saveWizardState, 1000);
+    });
 }
 
 // ── Step 3 : Letter ────────────────────────────────────────────────────────────
@@ -250,6 +290,7 @@ function buildAndShowLetter() {
     document.getElementById('letter-text').value    = text;
     document.getElementById('email-subject').value  = subject;
     storage.saveDraft(text);
+    saveWizardState();
 
     // Show contribute panel only when we have usable data
     const hasGoodData = state.selectedCamera && state.location?.lat;
@@ -279,21 +320,25 @@ function resetWizard() {
     state.location       = null;
     state.selectedCamera = null;
 
+    storage.clearWizardState();
+
     document.getElementById('photo-preview').innerHTML =
         `<div class="photo-placeholder">
             <span class="ph-icon">📷</span>
             <span>No photo taken yet</span>
          </div>`;
-    document.getElementById('btn-take-photo').textContent = 'Take Photo';
-    document.getElementById('btn-step0-next').disabled    = true;
-    document.getElementById('gps-status').className       = 'status-line hidden';
-    document.getElementById('registry-results').innerHTML = '';
+    document.getElementById('btn-take-photo').textContent  = 'Take Photo';
+    document.getElementById('btn-step0-next').disabled     = true;
+    document.getElementById('gps-status').className        = 'status-line hidden';
+    document.getElementById('postcode-fallback').classList.add('hidden');
+    document.getElementById('postcode-input').value        = '';
+    document.getElementById('registry-results').innerHTML  = '';
     document.getElementById('selected-info').classList.add('hidden');
-    document.getElementById('btn-step1-next').disabled    = true;
-    document.getElementById('self-description').value     = '';
-    document.getElementById('incident-date').value        = '';
-    document.getElementById('incident-time').value        = '';
-    document.getElementById('letter-text').value          = '';
+    document.getElementById('btn-step1-next').disabled     = true;
+    document.getElementById('self-description').value      = '';
+    document.getElementById('incident-date').value         = '';
+    document.getElementById('incident-time').value         = '';
+    document.getElementById('letter-text').value           = '';
     document.getElementById('contribute-status').className = 'status-line hidden';
 
     // Clear manual entry
@@ -302,6 +347,104 @@ function resetWizard() {
     });
 
     showStep(0);
+}
+
+// ── Draft persistence ──────────────────────────────────────────────────────────
+const WIZARD_STATE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+function saveWizardState() {
+    const incidentDate = document.getElementById('incident-date').value;
+    const incidentTime = document.getElementById('incident-time').value;
+    const selfDesc     = document.getElementById('self-description').value;
+    const letterText   = document.getElementById('letter-text').value;
+
+    storage.saveWizardState({
+        step:           state.step,
+        photoTime:      state.photo?.time?.toISOString() || null,
+        location:       state.location,
+        selectedCamera: state.selectedCamera,
+        incidentDate,
+        incidentTime,
+        selfDescription: selfDesc,
+        letterText,
+        saved:          Date.now(),
+    });
+}
+
+function tryRestoreWizardState() {
+    const saved = storage.getWizardState();
+    if (!saved) return;
+    if (Date.now() - saved.saved > WIZARD_STATE_TTL) {
+        storage.clearWizardState();
+        return;
+    }
+
+    const banner = document.getElementById('resume-banner');
+    const d = new Date(saved.saved);
+    const label = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+        + ' at ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    document.getElementById('resume-date').textContent = label;
+    banner.classList.remove('hidden');
+
+    document.getElementById('btn-resume').onclick = () => {
+        banner.classList.add('hidden');
+        restoreWizardState(saved);
+        showSection('request');
+    };
+
+    document.getElementById('btn-discard').onclick = () => {
+        storage.clearWizardState();
+        banner.classList.add('hidden');
+    };
+}
+
+function restoreWizardState(saved) {
+    // Restore state object
+    state.location       = saved.location || null;
+    state.selectedCamera = saved.selectedCamera || null;
+    state.photo = saved.photoTime
+        ? { data: null, time: new Date(saved.photoTime) }
+        : null;
+
+    // Restore form fields
+    if (saved.incidentDate)
+        document.getElementById('incident-date').value = saved.incidentDate;
+    if (saved.incidentTime)
+        document.getElementById('incident-time').value = saved.incidentTime;
+    if (saved.selfDescription)
+        document.getElementById('self-description').value = saved.selfDescription;
+    if (saved.letterText) {
+        document.getElementById('letter-text').value = saved.letterText;
+        // Rebuild subject from stored letter
+        const subject = getSubjectLine({
+            camera: state.selectedCamera,
+            location: state.location,
+            incidentTime: saved.incidentDate
+                ? new Date(`${saved.incidentDate}T${saved.incidentTime || '00:00'}`)
+                : null,
+            photoTime: state.photo?.time,
+        });
+        document.getElementById('email-subject').value = subject;
+    }
+
+    // Restore selected camera display
+    if (state.selectedCamera) {
+        selectCamera(state.selectedCamera, null);
+    }
+
+    // Navigate to saved step (but not further than step 3)
+    const targetStep = Math.min(saved.step || 0, 3);
+    showStep(targetStep);
+
+    // If we're on step 1, run registry search with restored location
+    if (targetStep <= 1 && state.location) searchRegistry();
+
+    // Note about photo
+    if (targetStep > 0 && !saved.letterText) {
+        setStatus('gps-status',
+            'Request restored — retake the photo to update the timestamp if needed.',
+            'info', 8000);
+    }
 }
 
 // ── Profile ────────────────────────────────────────────────────────────────────
@@ -364,7 +507,7 @@ function init() {
         };
     });
 
-    document.getElementById('btn-start').onclick    = () => { showSection('request'); showStep(0); };
+    document.getElementById('btn-start').onclick      = () => { showSection('request'); showStep(0); };
     document.getElementById('btn-go-profile').onclick = () => showSection('profile');
 
     initStep0();
@@ -376,6 +519,9 @@ function init() {
 
     showSection('home');
     showStep(0);
+
+    // Check for a resumable draft
+    tryRestoreWizardState();
 
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./sw.js').catch(() => {});

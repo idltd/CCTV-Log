@@ -9,7 +9,7 @@
 const REGISTRY_URL =
     'https://raw.githubusercontent.com/idltd/cctv-sar-db/master/cameras.json';
 
-const CACHE_KEY = 'cctv_registry_v1';
+const CACHE_KEY = 'cctv_registry_v2';
 const CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours
 
 // GitHub issue template URL
@@ -32,12 +32,24 @@ export const registry = {
 
     async _fetchRemote() {
         // Skip if URL is still a placeholder
-        if (REGISTRY_URL.includes('YOUR_USERNAME')) return; // placeholder not replaced
+        if (REGISTRY_URL.includes('YOUR_USERNAME')) return;
         const resp = await fetch(REGISTRY_URL, { cache: 'no-store' });
         if (!resp.ok) throw new Error(`Registry fetch: ${resp.status}`);
         const data = await resp.json();
-        this.cameras = [...(data.cameras || []), ...this._getLocal()];
-        this._saveCache(data.cameras || []);
+        const resolved = this._resolve(data);
+        this.cameras = [...resolved, ...this._getLocal()];
+        this._saveCache(resolved);
+    },
+
+    // Resolve operator_id references (v2 schema) into embedded operator objects.
+    // Also passes through v1 cameras that already have an embedded operator.
+    _resolve(data) {
+        const operators = data.operators || {};
+        return (data.cameras || []).map(c => {
+            if (c.operator) return c; // v1 — already embedded
+            const op = operators[c.operator_id] || { name: c.operator_id || 'Unknown operator' };
+            return { ...c, operator: op };
+        });
     },
 
     _loadCache() {
@@ -50,8 +62,8 @@ export const registry = {
         } catch { return null; }
     },
 
-    _saveCache(data) {
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ data, time: Date.now() }));
+    _saveCache(resolved) {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ data: resolved, time: Date.now() }));
     },
 
     // Haversine distance in metres

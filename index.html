@@ -30,6 +30,16 @@
 
     <!-- ══════════════════ HOME ══════════════════ -->
     <section id="section-home" class="section">
+
+        <!-- Resume banner — shown only when a draft exists -->
+        <div class="resume-banner hidden" id="resume-banner">
+            <p>You have an unfinished request from <strong id="resume-date"></strong>.</p>
+            <div class="resume-btns">
+                <button class="btn btn-primary"   id="btn-resume">Resume</button>
+                <button class="btn btn-secondary" id="btn-discard">Discard</button>
+            </div>
+        </div>
+
         <div class="hero">
             <div class="hero-icon">📹</div>
             <h2>Request Your CCTV Footage</h2>
@@ -114,6 +124,21 @@
             </div>
 
             <div class="status-line hidden" id="gps-status"></div>
+
+            <!-- Shown only when GPS is denied/unavailable -->
+            <div class="postcode-fallback hidden" id="postcode-fallback">
+                <div class="form-group" style="margin-top:12px">
+                    <label for="postcode-input">Enter the postcode where the camera is</label>
+                    <div class="postcode-row">
+                        <input type="text" id="postcode-input"
+                               placeholder="e.g. SE1 7EH" maxlength="8"
+                               style="text-transform:uppercase">
+                        <button class="btn btn-secondary" id="btn-postcode-search">
+                            Search
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <div class="step-nav">
                 <span></span>

@@ -80,7 +80,19 @@ I understand that you are required to:
     forward this request to the correct controller and inform me of
     their identity
 
-Please contact me at the address or email above if you require any further information to locate the relevant footage.
+I note that the exemptions in Schedule 2 of the Data Protection Act
+2018 are unlikely to apply to a specific request by a data subject for
+footage of themselves.
+
+Please acknowledge receipt of this request in writing, and contact me
+at the address or email above if you require any further information to
+locate the relevant footage.
+
+If you fail to respond within the statutory period, or refuse this
+request without adequate legal justification, I reserve the right to
+lodge a complaint with the Information Commissioner's Office
+(ico.org.uk) and to apply to the court for an order compelling
+disclosure under Section 167 of the Data Protection Act 2018.
 
 Yours faithfully,
 
@@ -89,10 +101,9 @@ ${name}`;
 
 export function getSubjectLine({ camera, location, incidentTime, photoTime }) {
     const d = incidentTime || photoTime;
-    const dateStr  = d ? d.toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
-    const locShort = camera?.location_desc
-        || location?.road
-        || location?.town
-        || 'CCTV Camera';
-    return `Subject Access Request – CCTV Footage – ${locShort} – ${dateStr}`;
+    const dateStr   = d ? d.toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
+    const opName    = camera?.operator?.name || '';
+    const locShort  = camera?.location_desc || location?.road || location?.town || 'CCTV Camera';
+    const controller = opName ? `${opName} – ` : '';
+    return `Subject Access Request – CCTV Footage – ${controller}${locShort} – ${dateStr}`;
 }
