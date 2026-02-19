@@ -143,6 +143,11 @@ async function searchByPostcode() {
     const postcode = input.value.trim();
     if (!postcode) return;
 
+    if (!navigator.onLine) {
+        setStatus('gps-status', 'No internet — postcode lookup unavailable offline.', 'warn', 0);
+        return;
+    }
+
     const btn = document.getElementById('btn-postcode-search');
     btn.disabled = true;
     btn.textContent = 'Searching…';
@@ -212,6 +217,11 @@ async function searchRegistry() {
             const input = document.getElementById('step1-postcode');
             const pc = input.value.trim();
             if (!pc) return;
+            if (!navigator.onLine) {
+                container.insertAdjacentHTML('afterbegin',
+                    '<p class="hint" style="color:var(--error)">No internet — use Save to Log and search later.</p>');
+                return;
+            }
             btn.disabled = true;
             btn.textContent = 'Searching…';
             try {
@@ -287,9 +297,17 @@ function selectCamera(cam, el) {
 
 function prefillIncidentDateTime() {
     if (!state.photo?.time) return;
+    const dateField = document.getElementById('incident-date');
+    const timeField = document.getElementById('incident-time');
+    // Only prefill empty fields — never overwrite values the user (or a restore) has set
+    if (dateField.value && timeField.value) return;
     const d = state.photo.time;
-    document.getElementById('incident-date').value = d.toISOString().slice(0, 10);
-    document.getElementById('incident-time').value = d.toTimeString().slice(0, 5);
+    // Use local date to avoid UTC midnight causing an off-by-one on the date
+    const pad = n => String(n).padStart(2, '0');
+    if (!dateField.value)
+        dateField.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    if (!timeField.value)
+        timeField.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 // ── Step 2 : Incident details ──────────────────────────────────────────────────
@@ -582,20 +600,29 @@ async function openIncidentForProcessing(id) {
 
     state.currentIncidentId = id;
     state.selectedCamera    = inc.camera || null;
-    state.location          = inc.camera
-        ? { lat: inc.lat, lng: inc.lng, display: inc.locationDisplay }
+    // Restore location from stored coords regardless of whether camera is known
+    state.location = (inc.lat && inc.lng)
+        ? { lat: inc.lat, lng: inc.lng, display: inc.locationDisplay || '' }
         : null;
     state.photo = inc.capturedAt
         ? { data: inc.thumbnail, time: new Date(inc.capturedAt) }
         : null;
 
-    // Restore step-2 fields
-    if (inc.incidentDate) document.getElementById('incident-date').value  = inc.incidentDate;
-    if (inc.incidentTime) document.getElementById('incident-time').value  = inc.incidentTime;
-    if (inc.selfDescription) document.getElementById('self-description').value = inc.selfDescription;
+    // Restore step-2 fields; clear first so prefill can run if values are absent
+    document.getElementById('incident-date').value    = inc.incidentDate    || '';
+    document.getElementById('incident-time').value    = inc.incidentTime    || '';
+    document.getElementById('self-description').value = inc.selfDescription || '';
+    // Fill date/time from photo timestamp when not stored (older records)
+    prefillIncidentDateTime();
 
-    // Restore step-1 display
-    if (inc.camera) selectCamera(inc.camera, null);
+    // Restore step-1 display and enable navigation
+    if (inc.camera) {
+        selectCamera(inc.camera, null);
+    } else {
+        // No camera yet — user can still go Back and pick one, or go forward
+        document.getElementById('btn-step1-next').disabled  = false;
+        document.getElementById('btn-save-to-log').disabled = false;
+    }
 
     // Restore letter if it was already generated
     if (inc.letterText) {
