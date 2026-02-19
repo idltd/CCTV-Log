@@ -624,16 +624,27 @@ async function openIncidentForProcessing(id) {
         document.getElementById('btn-save-to-log').disabled = false;
     }
 
-    // Restore letter if it was already generated
+    // Restore step-0 photo preview so Back from step 1 isn't blank
+    const preview = document.getElementById('photo-preview');
+    if (inc.thumbnail) {
+        preview.innerHTML = `<img src="${inc.thumbnail}" alt="Photo of CCTV camera">`;
+        document.getElementById('btn-take-photo').textContent = 'Retake Photo';
+        document.getElementById('btn-step0-next').disabled = false;
+    }
+
+    showSection('request');
+
+    // Restore letter if it was already generated → go straight to step 3
     if (inc.letterText) {
         document.getElementById('letter-text').value   = inc.letterText;
         document.getElementById('email-subject').value = inc.subjectLine || '';
         checkSARWarning(inc.camera);
-        showSection('request');
         showStep(3);
     } else {
-        showSection('request');
-        showStep(2);
+        // Start at step 1 (identify camera) — step 2 fields already prefilled above
+        showStep(1);
+        // Trigger registry search with restored location
+        searchRegistry();
     }
 }
 
