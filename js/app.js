@@ -101,8 +101,22 @@ function initStep0() {
 async function captureGPS() {
     setStatus('gps-status', 'Getting your location…', 'info', 0);
 
+    let coords;
     try {
-        const coords  = await loc.getPosition();
+        coords = await loc.getPosition();
+    } catch (e) {
+        // GPS itself unavailable (denied or unsupported)
+        setStatus('gps-status',
+            'Location unavailable — enter a postcode below to search the registry.',
+            'warn', 0);
+        document.getElementById('postcode-fallback').classList.remove('hidden');
+        if (state.step === 1) searchRegistry();
+        return;
+    }
+
+    // GPS coords obtained — try to reverse-geocode for a human-readable address.
+    // If offline, skip gracefully and store the raw coords so Save to Log still works.
+    try {
         const address = await loc.reverseGeocode(coords.lat, coords.lng);
         state.location = { ...coords, ...address };
         const label = address.road || address.town || address.display;
@@ -110,12 +124,16 @@ async function captureGPS() {
             `Location: ${label} (±${coords.accuracy}m)`, 'success', 0);
         document.getElementById('postcode-fallback').classList.add('hidden');
     } catch (e) {
+        // Geocode failed (likely offline) — keep the raw coords so the capture
+        // can still be saved to the log and processed later.
+        state.location = {
+            ...coords,
+            display: `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`,
+            road: '', postcode: '', town: '',
+        };
         setStatus('gps-status',
-            'Location unavailable — enter a postcode below to search the registry.',
+            `GPS: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)} — no address (offline?)`,
             'warn', 0);
-        document.getElementById('postcode-fallback').classList.remove('hidden');
-        // If the user already moved to step 1, refresh the registry UI so the
-        // inline postcode entry appears there too.
         if (state.step === 1) searchRegistry();
     }
 }
@@ -213,7 +231,17 @@ async function searchRegistry() {
         return;
     }
 
-    const nearby = await registry.nearby(state.location.lat, state.location.lng, 300);
+    let nearby;
+    try {
+        nearby = await registry.nearby(state.location.lat, state.location.lng, 300);
+    } catch (e) {
+        // Network error — likely offline. Capture is already safe to save to log.
+        container.innerHTML =
+            '<p class="hint">No internet connection — the registry cannot be searched right now. ' +
+            'Use <strong>Save to Log</strong> below to store this capture and identify the ' +
+            'operator later when you\'re back online.</p>';
+        return;
+    }
 
     if (nearby.length === 0) {
         container.innerHTML =
