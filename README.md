@@ -63,3 +63,19 @@ The app fetches the registry anonymously at startup and caches it locally for of
 ## Disclaimer
 
 This app is a tool to help you exercise your existing legal rights. It is not legal advice. If you are unsure about your position, consult a solicitor or contact the [Information Commissioner's Office](https://ico.org.uk).
+
+---
+
+## Sister Project
+
+**[cctv-sar-db](https://github.com/idltd/cctv-sar-db)** — the community-maintained camera registry this app queries.
+
+## Current State
+
+Working PWA, live on GitHub Pages.
+
+## Where It's Heading
+
+- Richer camera registry (more operators, automated imports)
+- Batch SAR workflows (multiple cameras in one incident)
+- Android native wrapper via PoPA bridge for better camera/GPS access
