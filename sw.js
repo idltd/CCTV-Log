@@ -35,7 +35,7 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-    // Let external API calls (Nominatim, GitHub) go through normally
+    // Let external API calls (Nominatim, Supabase) go through normally
     const url = new URL(e.request.url);
     if (url.origin !== location.origin) return;
 
