@@ -49,9 +49,30 @@ Dear Data Controller,
 Re: Subject Access Request — CCTV Footage
     Article 15 UK GDPR / Section 45 Data Protection Act 2018
 
-I am writing to exercise my right of access to personal data under Article 15 of the UK General Data Protection Regulation (UK GDPR) and Section 45 of the Data Protection Act 2018.
+EVIDENCE OF IDENTITY AND PRESENCE
+──────────────────────────────────
+At approximately ${incidentTimeStr} on ${incidentDateStr} I photographed
+the camera at ${camDesc} from the public area where I was standing.
 
-I request a copy of any CCTV footage in which I appear, captured at the location and time specified below.
+That photograph — with its embedded timestamp and GPS coordinates —
+constitutes evidence both of my physical presence at that location at
+that time and of my identity as the data subject in the footage. I am,
+by definition, the person your camera recorded.
+
+Under Article 12(6) UK GDPR, a controller may only request additional
+identifying information where there are reasonable doubts about the
+identity of the data subject. No such doubt exists: the footage and my
+photograph are of the same person, at the same place, at the same time.
+
+I am not required to provide — and will not be providing — any identity
+documents, driving licence, passport, or other credential. Any demand
+for such documents as a condition of processing this request would
+constitute a breach of Article 12(6) UK GDPR, which I would report to
+the Information Commissioner's Office.
+
+I therefore request, pursuant to Article 15 UK GDPR and Section 45 of
+the Data Protection Act 2018, a copy of all CCTV footage in which I
+appear at the location and time specified below.
 
 FOOTAGE DETAILS
 ───────────────
@@ -60,13 +81,9 @@ FOOTAGE DETAILS
   Time window     : ${fromTime} – ${toTime} (approximately)
   My appearance   : ${desc}
 
-EVIDENCE OF PRESENCE
-────────────────────
-At approximately ${incidentTimeStr} on ${incidentDateStr} I photographed the above camera from the public area where I was standing. I retain this photograph, together with a copy of this email, as a record of my presence at the location at that time.
-
 YOUR OBLIGATIONS
 ────────────────
-I understand that you are required to:
+You are required to:
 
   • Respond within one calendar month of receiving this request
   • Provide the data free of charge (unless the request is manifestly
@@ -78,13 +95,12 @@ I understand that you are required to:
     forward this request to the correct controller and inform me of
     their identity
 
-I note that the exemptions in Schedule 2 of the Data Protection Act
-2018 are unlikely to apply to a specific request by a data subject for
-footage of themselves.
+The exemptions in Schedule 2 of the Data Protection Act 2018 are
+unlikely to apply to a specific, evidence-backed request by a data
+subject for footage of themselves.
 
-Please acknowledge receipt of this request in writing, and contact me
-at the address or email above if you require any further information to
-locate the relevant footage.
+Please acknowledge receipt in writing and contact me at the email above
+if you require any further information to locate the relevant footage.
 
 If you fail to respond within the statutory period, or refuse this
 request without adequate legal justification, I reserve the right to
