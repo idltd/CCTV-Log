@@ -546,41 +546,32 @@ async function initRegistrySection() {
     }
 }
 
-function renderRegList(cameras, query) {
+function renderRegList(operators, query) {
     const wrap = document.getElementById('reg-results');
     const q = query.trim().toLowerCase();
     const filtered = q
-        ? cameras.filter(c =>
-            (c.location_desc || '').toLowerCase().includes(q) ||
-            (c.operators?.name || '').toLowerCase().includes(q))
-        : cameras;
+        ? operators.filter(o => o.name.toLowerCase().includes(q))
+        : operators;
 
     if (filtered.length === 0) {
-        wrap.innerHTML = '<p class="hint">No matching cameras.</p>';
+        wrap.innerHTML = '<p class="hint">No matching operators.</p>';
         return;
     }
 
-    // Group by operator — one row per organisation, with camera count
-    const groups = {};
-    filtered.forEach(c => {
-        const key = c.operators?.name || 'Unknown operator';
-        if (!groups[key]) groups[key] = { ico: c.operators?.ico_reg || '', count: 0 };
-        groups[key].count++;
-    });
-    const sorted = Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+    const totalCams = filtered.reduce((n, o) => n + o.camera_count, 0);
 
     wrap.innerHTML =
         `<p class="hint" style="margin-bottom:8px">
-            ${filtered.length} camera${filtered.length !== 1 ? 's' : ''}
-            across ${sorted.length} operator${sorted.length !== 1 ? 's' : ''}
+            ${filtered.length} operator${filtered.length !== 1 ? 's' : ''},
+            ${totalCams.toLocaleString()} cameras
             ${q ? '— matching filter' : 'in registry'}
         </p>` +
-        sorted.map(([name, info]) =>
+        filtered.map(o =>
             `<div class="registry-item" style="pointer-events:none">
-                <div class="op-name">${escHtml(name)}</div>
+                <div class="op-name">${escHtml(o.name)}</div>
                 <div class="op-meta">
-                    ${info.count} camera${info.count !== 1 ? 's' : ''}
-                    ${info.ico ? ' · ICO: ' + escHtml(info.ico) : ''}
+                    ${o.camera_count.toLocaleString()} camera${o.camera_count !== 1 ? 's' : ''}
+                    ${o.ico_reg ? ' · ICO: ' + escHtml(o.ico_reg) : ''}
                 </div>
             </div>`
         ).join('');

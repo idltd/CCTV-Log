@@ -107,19 +107,23 @@ export const registry = {
         catch { return []; }
     },
 
-    // Returns all cameras (up to limit) with operator details, for the registry browser.
-    async browse(limit = 300) {
+    // Returns all operators with their camera count, for the registry browser.
+    async browse() {
         const resp = await fetch(
-            `${SUPABASE_URL}/rest/v1/cameras` +
-            `?select=id,lat,lng,location_desc,operators(name,ico_reg,privacy_email)` +
-            `&order=location_desc.asc&limit=${limit}`, {
+            `${SUPABASE_URL}/rest/v1/operators` +
+            `?select=name,ico_reg,cameras(count)&order=name.asc`, {
             headers: {
                 'apikey':        SUPABASE_ANON,
                 'Authorization': `Bearer ${SUPABASE_ANON}`,
             },
         });
         if (!resp.ok) throw new Error(`Registry browse: ${resp.status}`);
-        return resp.json();
+        const rows = await resp.json();
+        return rows.map(r => ({
+            name:         r.name,
+            ico_reg:      r.ico_reg || '',
+            camera_count: r.cameras?.[0]?.count ?? 0,
+        }));
     },
 
     // Submit a camera contribution to Supabase pending_cameras.
