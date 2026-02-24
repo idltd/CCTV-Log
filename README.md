@@ -10,7 +10,7 @@ A Progressive Web App (PWA) for UK residents to submit Subject Access Requests f
 
 1. **Photograph the camera** — point your phone at the CCTV camera or its signage. The photo timestamp and GPS coordinates are captured simultaneously, creating timestamped evidence of your presence at the location.
 
-2. **Identify the operator** — the app searches a [community-maintained registry](https://github.com/idltd/cctv-sar-db) of known cameras by GPS proximity. If the camera isn't in the registry yet, you can enter the operator details manually and optionally contribute them for others.
+2. **Identify the operator** — the app searches a community-maintained registry of known cameras by GPS proximity (backed by Supabase + PostGIS). If the camera isn't in the registry yet, you can enter the operator details manually and optionally contribute them for others.
 
 3. **Draft your SAR letter** — a legally correct Subject Access Request is generated automatically, citing Article 15 UK GDPR / Section 45 DPA 2018, referencing your photographic evidence, and requesting footage from a 30-minute window around the incident.
 
@@ -37,15 +37,15 @@ This applies to cameras operated by businesses, local authorities, housing assoc
 - Your name and email address are stored **on your device only** (browser localStorage). They are never transmitted anywhere.
 - GPS coordinates are used in-session to search the camera registry and are not stored.
 - Your letter is handed to your own email app via a `mailto:` link — this app never sees it after that.
-- The [camera registry](https://github.com/idltd/cctv-sar-db) contains only publicly available operator data — no user information whatsoever.
+- The camera registry contains only publicly available operator data — no user information whatsoever.
 
 ---
 
 ## Camera Registry
 
-Camera and data controller information is sourced from a separate community-maintained repository: **[idltd/cctv-sar-db](https://github.com/idltd/cctv-sar-db)**
+Camera and data controller information is stored in a Supabase PostgreSQL database with PostGIS for geo queries. Geo lookups are performed server-side — only cameras within the search radius are returned.
 
-The app fetches the registry anonymously at startup and caches it locally for offline use. Contributions go via a reviewed GitHub Issue — no data goes live without approval.
+Contributions submitted via the in-app **Contribute** button go to a `pending_cameras` table and are reviewed before being promoted to the live registry. No account is required to contribute.
 
 ---
 
@@ -56,7 +56,8 @@ The app fetches the registry anonymously at startup and caches it locally for of
 - GPS via `navigator.geolocation`; reverse geocoding via [Nominatim](https://nominatim.openstreetmap.org/) (OpenStreetMap, free, no API key)
 - Camera capture via `<input type="file" capture="environment">` — works on all mobile browsers
 - Service worker caches all assets for offline use
-- Camera registry fetched from GitHub (anonymous HTTP GET, no token required)
+- Camera registry: Supabase + PostGIS. Geo queries run server-side. Anon publishable key (read-only by RLS); contributions POST to `pending_cameras`
+- Admin tool at `tools/admin.html` for reviewing and approving pending submissions (requires service role key, local use only)
 
 ---
 
@@ -65,10 +66,6 @@ The app fetches the registry anonymously at startup and caches it locally for of
 This app is a tool to help you exercise your existing legal rights. It is not legal advice. If you are unsure about your position, consult a solicitor or contact the [Information Commissioner's Office](https://ico.org.uk).
 
 ---
-
-## Sister Project
-
-**[cctv-sar-db](https://github.com/idltd/cctv-sar-db)** — the community-maintained camera registry this app queries.
 
 ## Current State
 
