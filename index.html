@@ -321,8 +321,8 @@
         <h2 style="margin-bottom:8px">My Details</h2>
         <p class="hint">
             Stored on this device only — never sent to any server.
-            These pre-fill the header of your SAR letter.
-            Leave anything blank and edit the letter manually.
+            Your name and email pre-fill the SAR letter. No home address is collected
+            or included — your email is legally sufficient contact information.
         </p>
 
         <div class="form-group">
@@ -331,13 +331,15 @@
                    placeholder="Name as it should appear on the letter">
         </div>
         <div class="form-group">
-            <label for="profile-address">Your address</label>
-            <textarea id="profile-address" rows="3"
-                      placeholder="Address for correspondence"></textarea>
-        </div>
-        <div class="form-group">
             <label for="profile-email">Your email address</label>
             <input type="email" id="profile-email" placeholder="you@example.com">
+            <p class="hint" style="margin-top:4px">
+                Consider using a dedicated address for SARs so you don't hand your
+                everyday inbox to organisations you may be in dispute with.
+                Free options: <a href="https://simplelogin.io" target="_blank" rel="noopener">SimpleLogin</a>,
+                <a href="https://addy.io" target="_blank" rel="noopener">addy.io</a>,
+                or a free <a href="https://proton.me" target="_blank" rel="noopener">Proton Mail</a> account.
+            </p>
         </div>
 
         <button class="btn btn-primary" id="btn-save-profile">Save to Device</button>
@@ -377,11 +379,18 @@
             <ul style="margin:6px 0 0 18px; font-size:0.88em; color:#6b7280; line-height:1.8">
                 <li>The date, time and location of the incident</li>
                 <li>A description of your appearance on the day</li>
-                <li>A contact address — an email address is sufficient</li>
+                <li>An email address for their response</li>
             </ul>
             <p style="margin-top:8px">You do <strong>not</strong> need to give your home
-               address or prove your identity with documents. If you prefer, use a dedicated
-               email address for SAR requests — keeping it separate from your everyday account.</p>
+               address or prove your identity with documents.</p>
+            <p style="margin-top:8px">Consider using a dedicated email address for SARs
+               so you don't hand your everyday inbox to organisations you may be in dispute with.
+               Free options include
+               <a href="https://simplelogin.io" target="_blank" rel="noopener">SimpleLogin</a>,
+               <a href="https://addy.io" target="_blank" rel="noopener">addy.io</a>
+               (both create private aliases that forward to your real inbox), or a free
+               <a href="https://proton.me" target="_blank" rel="noopener">Proton Mail</a>
+               account kept separate from your everyday email.</p>
         </div>
 
         <div class="card" style="margin-bottom:10px">

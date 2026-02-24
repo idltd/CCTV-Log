@@ -22,9 +22,8 @@ export function generateLetter({ profile, camera, location, photoTime, incidentT
     const fromTime   = incident ? fmtTime(addMinutes(incident, -30)) : '[FROM]';
     const toTime     = incident ? fmtTime(addMinutes(incident,  30)) : '[TO]';
 
-    const name    = profile.name    || '[YOUR NAME]';
-    const address = profile.address || '[YOUR ADDRESS]';
-    const email   = profile.email   || '[YOUR EMAIL]';
+    const name  = profile.name  || '[YOUR NAME]';
+    const email = profile.email || '[YOUR EMAIL]';
 
     const opName    = camera?.operator?.name          || '[DATA CONTROLLER NAME]';
     const opAddr    = camera?.operator?.postal_address || '[DATA CONTROLLER ADDRESS]';
@@ -35,7 +34,6 @@ export function generateLetter({ profile, camera, location, photoTime, incidentT
     const desc      = description?.trim()   || '[Please describe yourself here — height, build, clothing worn at the time]';
 
     return `${name}
-${address}
 ${email}
 
 ${today}

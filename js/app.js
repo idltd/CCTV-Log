@@ -712,9 +712,8 @@ function initProfile() {
 
     document.getElementById('btn-save-profile').onclick = () => {
         storage.saveProfile({
-            name:    document.getElementById('profile-name').value.trim(),
-            address: document.getElementById('profile-address').value.trim(),
-            email:   document.getElementById('profile-email').value.trim(),
+            name:  document.getElementById('profile-name').value.trim(),
+            email: document.getElementById('profile-email').value.trim(),
         });
         setStatus('profile-saved', 'Saved to this device.', 'success');
     };
@@ -722,9 +721,8 @@ function initProfile() {
 
 function loadProfileFields() {
     const p = storage.getProfile();
-    document.getElementById('profile-name').value    = p.name    || '';
-    document.getElementById('profile-address').value = p.address || '';
-    document.getElementById('profile-email').value   = p.email   || '';
+    document.getElementById('profile-name').value  = p.name  || '';
+    document.getElementById('profile-email').value = p.email || '';
 }
 
 // ── Utilities ──────────────────────────────────────────────────────────────────
