@@ -560,19 +560,30 @@ function renderRegList(cameras, query) {
         return;
     }
 
+    // Group by operator — one row per organisation, with camera count
+    const groups = {};
+    filtered.forEach(c => {
+        const key = c.operators?.name || 'Unknown operator';
+        if (!groups[key]) groups[key] = { ico: c.operators?.ico_reg || '', count: 0 };
+        groups[key].count++;
+    });
+    const sorted = Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+
     wrap.innerHTML =
-        `<p class="hint" style="margin-bottom:8px">${filtered.length} camera${filtered.length !== 1 ? 's' : ''}${q ? ' matching' : ' in registry'}</p>` +
-        filtered.map(c => {
-            const op  = c.operators?.name || 'Unknown operator';
-            const ico = c.operators?.ico_reg ? ` · ICO: ${escHtml(c.operators.ico_reg)}` : '';
-            const map = c.lat && c.lng
-                ? ` · <a href="https://maps.google.com/?q=${c.lat},${c.lng}" target="_blank" rel="noopener">map</a>`
-                : '';
-            return `<div class="registry-item" style="pointer-events:none">
-                <div class="op-name">${escHtml(op)}</div>
-                <div class="op-meta">${escHtml(c.location_desc || '')}${ico}${map}</div>
-            </div>`;
-        }).join('');
+        `<p class="hint" style="margin-bottom:8px">
+            ${filtered.length} camera${filtered.length !== 1 ? 's' : ''}
+            across ${sorted.length} operator${sorted.length !== 1 ? 's' : ''}
+            ${q ? '— matching filter' : 'in registry'}
+        </p>` +
+        sorted.map(([name, info]) =>
+            `<div class="registry-item" style="pointer-events:none">
+                <div class="op-name">${escHtml(name)}</div>
+                <div class="op-meta">
+                    ${info.count} camera${info.count !== 1 ? 's' : ''}
+                    ${info.ico ? ' · ICO: ' + escHtml(info.ico) : ''}
+                </div>
+            </div>`
+        ).join('');
 }
 
 // ── Log: render list ───────────────────────────────────────────────────────────
