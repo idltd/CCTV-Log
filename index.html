@@ -22,6 +22,7 @@
         <button class="nav-btn active" data-section="home">Home</button>
         <button class="nav-btn" data-section="request">Capture</button>
         <button class="nav-btn" data-section="log">My Log</button>
+        <button class="nav-btn" data-section="registry">Registry</button>
         <button class="nav-btn" data-section="profile">My Details</button>
         <button class="nav-btn" data-section="about">About</button>
     </nav>
@@ -346,6 +347,25 @@
         <div class="status-line hidden" id="profile-saved"></div>
     </section>
 
+    <!-- ══════════════════ REGISTRY ══════════════════ -->
+    <section id="section-registry" class="section hidden">
+        <h2 style="margin-bottom:4px">Camera Registry</h2>
+        <p class="hint" style="margin-bottom:12px">
+            Known cameras and their data controllers, contributed by the community.
+            When you photograph a camera, the app searches this registry automatically
+            by GPS — you rarely need to look here manually.
+        </p>
+
+        <input type="text" id="reg-search"
+               placeholder="Filter by location or operator…"
+               style="width:100%;padding:9px 12px;border:1px solid var(--border);
+                      border-radius:var(--radius);font-size:0.95em;margin-bottom:12px">
+
+        <div id="reg-results">
+            <p class="hint">Loading…</p>
+        </div>
+    </section>
+
     <!-- ══════════════════ ABOUT ══════════════════ -->
     <section id="section-about" class="section hidden">
 
@@ -424,14 +444,12 @@
 
         <div class="card" style="margin-bottom:10px">
             <strong>Camera Registry</strong>
-            <p>The shared registry of known cameras and their operators is
-               community-maintained. All submissions are reviewed before publication.
-               Anyone can contribute — no account required. Use the
-               <strong>Contribute</strong> button at the end of a request to submit
-               a camera directly from within the app.</p>
-            <a class="btn btn-secondary"
-               href="https://supabase.com/dashboard/project/lyijydkwitjxbcxurkep/editor"
-               target="_blank" rel="noopener">Manage Registry ↗</a>
+            <p>Known cameras and their data controllers are stored in a shared registry.
+               When you photograph a camera the app searches it automatically by GPS —
+               you don't need to look anything up. All contributions are reviewed before
+               publication. Use the <strong>Contribute</strong> button at the end of a
+               request to submit a camera you've encountered.</p>
+            <button class="btn btn-secondary" id="btn-about-registry">Browse the Registry</button>
         </div>
 
         <div class="card">

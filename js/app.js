@@ -530,6 +530,51 @@ async function markIncidentSent() {
     document.getElementById('btn-mark-sent').textContent = '✓ Sent';
 }
 
+// ── Registry browser ──────────────────────────────────────────────────────
+let _regAll = [];
+
+async function initRegistrySection() {
+    const el = document.getElementById('reg-search');
+    el.addEventListener('input', () => renderRegList(_regAll, el.value));
+
+    const wrap = document.getElementById('reg-results');
+    try {
+        _regAll = await registry.browse();
+        renderRegList(_regAll, '');
+    } catch {
+        wrap.innerHTML = '<p class="hint">Registry unavailable — check your connection.</p>';
+    }
+}
+
+function renderRegList(cameras, query) {
+    const wrap = document.getElementById('reg-results');
+    const q = query.trim().toLowerCase();
+    const filtered = q
+        ? cameras.filter(c =>
+            (c.location_desc || '').toLowerCase().includes(q) ||
+            (c.operators?.name || '').toLowerCase().includes(q))
+        : cameras;
+
+    if (filtered.length === 0) {
+        wrap.innerHTML = '<p class="hint">No matching cameras.</p>';
+        return;
+    }
+
+    wrap.innerHTML =
+        `<p class="hint" style="margin-bottom:8px">${filtered.length} camera${filtered.length !== 1 ? 's' : ''}${q ? ' matching' : ' in registry'}</p>` +
+        filtered.map(c => {
+            const op  = c.operators?.name || 'Unknown operator';
+            const ico = c.operators?.ico_reg ? ` · ICO: ${escHtml(c.operators.ico_reg)}` : '';
+            const map = c.lat && c.lng
+                ? ` · <a href="https://maps.google.com/?q=${c.lat},${c.lng}" target="_blank" rel="noopener">map</a>`
+                : '';
+            return `<div class="registry-item" style="pointer-events:none">
+                <div class="op-name">${escHtml(op)}</div>
+                <div class="op-meta">${escHtml(c.location_desc || '')}${ico}${map}</div>
+            </div>`;
+        }).join('');
+}
+
 // ── Log: render list ───────────────────────────────────────────────────────────
 async function initLog() {
     const incidents = await incidentLog.getAll();
@@ -781,16 +826,21 @@ async function init() {
     document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.onclick = async () => {
             showSection(btn.dataset.section);
-            if (btn.dataset.section === 'request') showStep(state.step);
-            if (btn.dataset.section === 'log') {
-                await initLog();
-            }
+            if (btn.dataset.section === 'request')  showStep(state.step);
+            if (btn.dataset.section === 'log')      await initLog();
+            if (btn.dataset.section === 'registry') await initRegistrySection();
         };
     });
 
     // Home buttons
     document.getElementById('btn-capture').onclick    = () => { showSection('request'); showStep(0); };
     document.getElementById('btn-go-profile').onclick = () => showSection('profile');
+    document.getElementById('btn-about-registry').onclick = async () => {
+        showSection('registry');
+        document.querySelectorAll('.nav-btn').forEach(b =>
+            b.classList.toggle('active', b.dataset.section === 'registry'));
+        await initRegistrySection();
+    };
     document.getElementById('home-view-log').onclick  = async e => {
         e.preventDefault();
         showSection('log');

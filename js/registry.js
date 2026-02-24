@@ -107,6 +107,21 @@ export const registry = {
         catch { return []; }
     },
 
+    // Returns all cameras (up to limit) with operator details, for the registry browser.
+    async browse(limit = 300) {
+        const resp = await fetch(
+            `${SUPABASE_URL}/rest/v1/cameras` +
+            `?select=id,lat,lng,location_desc,operators(name,ico_reg,privacy_email)` +
+            `&order=location_desc.asc&limit=${limit}`, {
+            headers: {
+                'apikey':        SUPABASE_ANON,
+                'Authorization': `Bearer ${SUPABASE_ANON}`,
+            },
+        });
+        if (!resp.ok) throw new Error(`Registry browse: ${resp.status}`);
+        return resp.json();
+    },
+
     // Submit a camera contribution to Supabase pending_cameras.
     // No GitHub account required — reviewed in the Supabase dashboard.
     async submitContribution(camera, location) {
