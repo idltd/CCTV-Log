@@ -58,6 +58,27 @@ Contributions submitted via the in-app **Contribute** button go to a `pending_ca
 - Service worker caches all assets for offline use
 - Camera registry: Supabase + PostGIS. Geo queries run server-side. Anon publishable key (read-only by RLS); contributions POST to `pending_cameras`
 - Admin tool at `tools/admin.html` for reviewing and approving pending submissions (requires service role key, local use only)
+- Database population scripts in `tools/` (see below)
+
+### Database Population Pipeline
+
+The camera registry is populated from two public data sources:
+
+1. **ICO Register** — the UK Information Commissioner's register of fee payers (~1.3M organisations). `tools/import_ico.py` downloads and filters this for large organisations (Tier 3), known retail/food brands, and public sector bodies (NHS, police, councils, universities). Outputs `tools/ico_filtered.json`.
+
+2. **OpenStreetMap** — `tools/import_osm.py` reads the filtered list, auto-derives brand names from corporate names (stripping "Limited", "PLC", etc.), queries the Overpass API for matching premises in GB, and upserts operators + cameras to Supabase. Handles Overpass failover, retries, and rate limiting.
+
+```
+cd tools
+py -m venv ../.venv && ..\.venv\Scripts\activate
+pip install -r requirements.txt
+py import_ico.py                          # download + filter ICO register
+py import_osm.py --dry-run --only aldi-stores  # preview one operator
+py import_osm.py --only aldi-stores       # import one operator
+py import_osm.py                          # import all mapped operators
+```
+
+A small `BRAND_OVERRIDES` dict in `import_osm.py` handles cases where the corporate name differs from the consumer brand (e.g. "T J Morris" → "Home Bargains", "Whitbread Group" → "Premier Inn"). The `operator` tag is also searched, covering car parks and infrastructure brands.
 
 ---
 
@@ -69,10 +90,10 @@ This app is a tool to help you exercise your existing legal rights. It is not le
 
 ## Current State
 
-Working PWA, live on GitHub Pages.
+Working PWA, live on GitHub Pages. Camera registry populated with ~30,000 locations across 33 major UK brands (supermarkets, retail, food chains, petrol stations, hotels, cinemas, gyms, car parks).
 
 ## Where It's Heading
 
-- Richer camera registry (more operators, automated imports)
+- More operators (public sector: NHS, police, councils, universities)
 - Batch SAR workflows (multiple cameras in one incident)
-- Android native wrapper via PoPA bridge for better camera/GPS access
+- Editable fields when approving submitted cameras in admin tool
