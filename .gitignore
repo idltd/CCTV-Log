@@ -2,5 +2,7 @@
 Thumbs.db
 *.log
 node_modules/
+__pycache__/
+.venv/
 .claude/
 tools/ico_filtered.json
