@@ -3,4 +3,4 @@ Thumbs.db
 *.log
 node_modules/
 .claude/
-tools/
+tools/ico_filtered.json

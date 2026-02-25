@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CCTV SAR — Supabase Admin</title>
+<style>
+  /* ── Reset / base ─────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    background: #f4f5f7;
+    color: #1a1a2e;
+    padding: 16px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 1.3rem; margin-bottom: 4px; }
+  h2 { font-size: 1rem; margin: 0 0 12px; color: #555; }
+  a { color: #2563eb; }
+
+  /* ── Layout ───────────────────────────────────────────────────── */
+  .page { max-width: 960px; margin: 0 auto; }
+  .warning-banner {
+    background: #fef3c7; border: 1px solid #d97706;
+    border-radius: 6px; padding: 10px 14px; margin-bottom: 16px;
+    font-size: 0.85em; line-height: 1.5;
+  }
+  .card {
+    background: #fff; border-radius: 8px; padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.1); margin-bottom: 16px;
+  }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  label { font-weight: 600; min-width: 120px; }
+  input[type=text], input[type=password] {
+    flex: 1; padding: 7px 10px; border: 1px solid #cbd5e1;
+    border-radius: 5px; font-size: 0.9em; min-width: 220px;
+  }
+  input[type=text]:focus, input[type=password]:focus {
+    outline: 2px solid #2563eb; border-color: transparent;
+  }
+  select {
+    padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 5px;
+    font-size: 0.9em; background: #fff;
+  }
+
+  /* ── Buttons ──────────────────────────────────────────────────── */
+  .btn {
+    padding: 7px 14px; border: none; border-radius: 5px; cursor: pointer;
+    font-size: 0.9em; font-weight: 600; white-space: nowrap;
+  }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-primary   { background: #2563eb; color: #fff; }
+  .btn-success   { background: #16a34a; color: #fff; }
+  .btn-danger    { background: #dc2626; color: #fff; }
+  .btn-secondary { background: #e2e8f0; color: #1a1a2e; }
+
+  /* ── Status/log ───────────────────────────────────────────────── */
+  #log {
+    background: #1e1e2e; color: #a6e3a1; font-family: monospace; font-size: 0.8em;
+    padding: 12px; border-radius: 6px; height: 180px; overflow-y: auto;
+    margin-bottom: 16px; white-space: pre-wrap; word-break: break-all;
+  }
+  .log-error { color: #f38ba8; }
+  .log-warn  { color: #f9e2af; }
+  .log-info  { color: #89dceb; }
+
+  /* ── Submissions list ─────────────────────────────────────────── */
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+  .tab {
+    padding: 6px 14px; border-radius: 5px; cursor: pointer; border: none;
+    font-size: 0.9em; background: #e2e8f0; color: #555; font-weight: 600;
+  }
+  .tab.active { background: #2563eb; color: #fff; }
+
+  .submissions { display: flex; flex-direction: column; gap: 12px; }
+  .sub-card {
+    border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;
+  }
+  .sub-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+    flex-wrap: wrap; gap: 8px;
+  }
+  .sub-title { font-weight: 700; font-size: 0.95em; }
+  .sub-meta  { font-size: 0.78em; color: #64748b; }
+  .sub-body  { padding: 10px 14px; }
+  .sub-fields { display: grid; grid-template-columns: 140px 1fr; gap: 4px 12px; font-size: 0.85em; }
+  .sub-fields .key { color: #64748b; font-weight: 600; }
+  .sub-fields .val { word-break: break-word; }
+  .sub-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .badge {
+    display: inline-block; font-size: 0.75em; padding: 2px 8px; border-radius: 99px;
+    font-weight: 600; white-space: nowrap;
+  }
+  .badge-pending { background: #fef3c7; color: #92400e; }
+  .badge-sent    { background: #dcfce7; color: #166534; }
+
+  /* ── Live cameras ─────────────────────────────────────────────── */
+  #live-search-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  #live-search-row input { flex: 1; min-width: 180px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+  th { background: #f1f5f9; text-align: left; padding: 7px 10px; border-bottom: 2px solid #e2e8f0; }
+  td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  tr:hover td { background: #f8fafc; }
+  .no-data { color: #94a3b8; padding: 24px; text-align: center; font-style: italic; }
+
+  /* ── Misc ─────────────────────────────────────────────────────── */
+  .hidden { display: none !important; }
+  #setup-section { display: block; }
+  #main-section  { display: none; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>CCTV SAR — Supabase Admin</h1>
+
+  <div class="warning-banner">
+    <strong>LOCAL USE ONLY.</strong> This tool uses your Supabase <strong>service role key</strong>,
+    which bypasses Row Level Security. Never share this key or commit it to any repository.
+    Open this file directly from your filesystem — do not host it publicly.
+  </div>
+
+  <!-- ── Setup ──────────────────────────────────────────────────── -->
+  <section id="setup-section" class="card">
+    <h2>Connect to Supabase</h2>
+    <div class="row">
+      <label>Project URL</label>
+      <input type="text" id="inp-url" placeholder="https://xxxx.supabase.co"
+             value="https://lyijydkwitjxbcxurkep.supabase.co">
+    </div>
+    <div class="row">
+      <label>Service Role Key</label>
+      <input type="password" id="inp-key" placeholder="eyJ… (service_role key, not anon key)">
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn btn-primary" id="btn-connect">Connect</button>
+      <span id="connect-status" style="font-size:0.85em;color:#64748b"></span>
+    </div>
+    <p style="margin-top:10px;font-size:0.8em;color:#64748b">
+      Find your service role key in:
+      <a href="https://supabase.com/dashboard/project/lyijydkwitjxbcxurkep/settings/api"
+         target="_blank" rel="noopener">Project Settings → API</a>
+      → service_role (secret).
+    </p>
+  </section>
+
+  <!-- ── Main ───────────────────────────────────────────────────── -->
+  <section id="main-section">
+
+    <div class="card" style="padding:10px 16px">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span id="conn-label" style="font-weight:600;font-size:0.9em"></span>
+        <button class="btn btn-secondary" id="btn-disconnect" style="padding:4px 10px;font-size:0.82em">Disconnect</button>
+        <span style="flex:1"></span>
+        <a class="btn btn-secondary" style="padding:4px 10px;font-size:0.82em;text-decoration:none"
+           href="https://supabase.com/dashboard/project/lyijydkwitjxbcxurkep/editor"
+           target="_blank" rel="noopener">Table Editor ↗</a>
+        <a class="btn btn-secondary" style="padding:4px 10px;font-size:0.82em;text-decoration:none"
+           href="https://supabase.com/dashboard/project/lyijydkwitjxbcxurkep/sql/new"
+           target="_blank" rel="noopener">SQL Editor ↗</a>
+        <a class="btn btn-secondary" style="padding:4px 10px;font-size:0.82em;text-decoration:none"
+           href="https://supabase.com/dashboard/project/lyijydkwitjxbcxurkep/logs/explorer"
+           target="_blank" rel="noopener">Logs ↗</a>
+      </div>
+    </div>
+
+    <!-- Activity log -->
+    <div id="log">Ready.\n</div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" data-tab="pending">Pending Submissions</button>
+      <button class="tab" data-tab="cameras">Live Cameras</button>
+      <button class="tab" data-tab="operators">Operators</button>
+    </div>
+
+    <!-- ── Pending tab ───────────────────────────────────────────── -->
+    <div id="tab-pending">
+      <div class="row">
+        <button class="btn btn-primary" id="btn-refresh-pending">Refresh</button>
+        <span id="pending-count" style="font-size:0.85em;color:#64748b"></span>
+      </div>
+      <div id="pending-list" class="submissions">
+        <p class="no-data">Click Refresh to load pending submissions.</p>
+      </div>
+    </div>
+
+    <!-- ── Cameras tab ───────────────────────────────────────────── -->
+    <div id="tab-cameras" class="hidden">
+      <div id="live-search-row">
+        <input type="text" id="camera-search" placeholder="Search by location or operator…">
+        <button class="btn btn-primary" id="btn-search-cameras">Search</button>
+        <button class="btn btn-secondary" id="btn-load-all-cameras">Load All</button>
+      </div>
+      <div id="cameras-table-wrap">
+        <p class="no-data">Use Search or Load All to view cameras.</p>
+      </div>
+    </div>
+
+    <!-- ── Operators tab ─────────────────────────────────────────── -->
+    <div id="tab-operators" class="hidden">
+      <div class="row">
+        <button class="btn btn-primary" id="btn-load-operators">Load All Operators</button>
+        <span id="operators-count" style="font-size:0.85em;color:#64748b"></span>
+      </div>
+      <div id="operators-table-wrap">
+        <p class="no-data">Click Load All Operators to view.</p>
+      </div>
+    </div>
+
+  </section><!-- /main-section -->
+</div><!-- /page -->
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+let CFG = { url: '', key: '' };
+
+// ── Logging ───────────────────────────────────────────────────────────────────
+function log(msg, cls = '') {
+  const el = document.getElementById('log');
+  const line = document.createElement('span');
+  if (cls) line.className = cls;
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Supabase REST helpers ─────────────────────────────────────────────────────
+async function supa(method, path, body, extraHeaders = {}) {
+  const resp = await fetch(`${CFG.url}/rest/v1/${path}`, {
+    method,
+    headers: {
+      'apikey':        CFG.key,
+      'Authorization': `Bearer ${CFG.key}`,
+      'Content-Type':  'application/json',
+      'Prefer':        method === 'POST' ? 'return=representation' : '',
+      ...extraHeaders,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const text = await resp.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = text; }
+  if (!resp.ok) throw Object.assign(new Error(`${resp.status} ${resp.statusText}`), { data });
+  return data;
+}
+
+// ── Connect ───────────────────────────────────────────────────────────────────
+document.getElementById('btn-connect').onclick = async () => {
+  const url = document.getElementById('inp-url').value.trim().replace(/\/$/, '');
+  const key = document.getElementById('inp-key').value.trim();
+  if (!url || !key) { alert('Enter both URL and key.'); return; }
+
+  const status = document.getElementById('connect-status');
+  status.textContent = 'Connecting…';
+
+  // Quick sanity-check: fetch pending_cameras count
+  try {
+    const resp = await fetch(`${url}/rest/v1/pending_cameras?select=id&limit=1`, {
+      headers: { 'apikey': key, 'Authorization': `Bearer ${key}` },
+    });
+    if (!resp.ok) throw new Error(`${resp.status}`);
+    CFG = { url, key };
+    sessionStorage.setItem('admin_url', url);
+    // Never store the key in sessionStorage — user must re-enter each session
+    document.getElementById('setup-section').style.display = 'none';
+    document.getElementById('main-section').style.display  = 'block';
+    document.getElementById('conn-label').textContent      = `Connected: ${url}`;
+    log('Connected to Supabase.', 'log-info');
+  } catch (e) {
+    status.textContent = `Error: ${e.message}. Check URL and key.`;
+    status.style.color = '#dc2626';
+  }
+};
+
+// Restore URL (key intentionally not stored)
+const savedUrl = sessionStorage.getItem('admin_url');
+if (savedUrl) document.getElementById('inp-url').value = savedUrl;
+
+document.getElementById('btn-disconnect').onclick = () => {
+  CFG = { url: '', key: '' };
+  document.getElementById('setup-section').style.display = 'block';
+  document.getElementById('main-section').style.display  = 'none';
+  document.getElementById('inp-key').value = '';
+  log('Disconnected.');
+};
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('[id^="tab-"]').forEach(t => t.classList.add('hidden'));
+    document.getElementById(`tab-${btn.dataset.tab}`).classList.remove('hidden');
+  };
+});
+
+// ── Pending submissions ───────────────────────────────────────────────────────
+document.getElementById('btn-refresh-pending').onclick = loadPending;
+
+async function loadPending() {
+  const list = document.getElementById('pending-list');
+  list.innerHTML = '<p class="no-data">Loading…</p>';
+  try {
+    const rows = await supa('GET', 'pending_cameras?order=submitted_at.asc');
+    document.getElementById('pending-count').textContent =
+      `${rows.length} submission${rows.length !== 1 ? 's' : ''}`;
+    log(`Loaded ${rows.length} pending submission(s).`, 'log-info');
+    renderPending(rows);
+  } catch (e) {
+    log(`Failed to load pending submissions: ${e.message}`, 'log-error');
+    list.innerHTML = `<p class="no-data" style="color:#dc2626">Error: ${e.message}</p>`;
+  }
+}
+
+function renderPending(rows) {
+  const list = document.getElementById('pending-list');
+  if (rows.length === 0) {
+    list.innerHTML = '<p class="no-data">No pending submissions.</p>';
+    return;
+  }
+  list.innerHTML = '';
+  rows.forEach(r => {
+    const card = document.createElement('div');
+    card.className = 'sub-card';
+    const submitted = r.submitted_at
+      ? new Date(r.submitted_at).toLocaleString('en-GB') : '(unknown)';
+    card.innerHTML = `
+      <div class="sub-header">
+        <div>
+          <div class="sub-title">${esc(r.operator_name || '(unnamed)')}</div>
+          <div class="sub-meta">ID: ${r.id} &middot; Submitted: ${submitted}</div>
+        </div>
+        <span class="badge badge-pending">Pending</span>
+      </div>
+      <div class="sub-body">
+        <div class="sub-fields">
+          <span class="key">Location</span>
+          <span class="val">${esc(r.location_desc || '—')}</span>
+          <span class="key">Lat / Lng</span>
+          <span class="val">${r.lat ?? '—'}, ${r.lng ?? '—'}
+            ${r.lat && r.lng
+              ? `&nbsp;<a href="https://maps.google.com/?q=${r.lat},${r.lng}" target="_blank" rel="noopener">Map ↗</a>`
+              : ''}</span>
+          <span class="key">ICO Reg</span>
+          <span class="val">${esc(r.ico_reg || '—')}</span>
+          <span class="key">Email</span>
+          <span class="val">${esc(r.privacy_email || '—')}</span>
+          <span class="key">Address</span>
+          <span class="val">${esc(r.postal_address || '—')}</span>
+        </div>
+        <div class="sub-actions">
+          <button class="btn btn-success btn-approve" data-id="${r.id}">✓ Approve</button>
+          <button class="btn btn-danger btn-reject"  data-id="${r.id}">✗ Reject</button>
+        </div>
+      </div>`;
+
+    card.querySelector('.btn-approve').onclick = () => approvePending(r, card);
+    card.querySelector('.btn-reject').onclick  = () => rejectPending(r, card);
+    list.appendChild(card);
+  });
+}
+
+async function approvePending(r, card) {
+  if (!confirm(`Approve "${r.operator_name}" at ${r.location_desc}?\nThis will add it to the live camera registry.`)) return;
+
+  const approveBtn = card.querySelector('.btn-approve');
+  const rejectBtn  = card.querySelector('.btn-reject');
+  approveBtn.disabled = rejectBtn.disabled = true;
+  approveBtn.textContent = 'Approving…';
+  log(`Approving pending ID ${r.id} — "${r.operator_name}"…`);
+
+  try {
+    // Step 1: Find or create operator
+    let operatorId;
+    const existing = await supa('GET',
+      `operators?select=id&name=eq.${encodeURIComponent(r.operator_name)}&limit=1`);
+    if (existing.length > 0) {
+      operatorId = existing[0].id;
+      log(`  Operator already exists: ${operatorId}`);
+    } else {
+      const created = await supa('POST', 'operators', {
+        name:           r.operator_name,
+        ico_reg:        r.ico_reg        || null,
+        privacy_email:  r.privacy_email  || null,
+        postal_address: r.postal_address || null,
+      });
+      operatorId = created[0]?.id ?? created.id;
+      log(`  Created operator: ${operatorId}`);
+    }
+
+    // Step 2: Insert camera
+    const camPayload = {
+      lat:           r.lat,
+      lng:           r.lng,
+      location_desc: r.location_desc || '',
+      operator_id:   operatorId,
+    };
+    // Include PostGIS geography if supported (generated columns will be ignored automatically)
+    const camCreated = await supa('POST', 'cameras', camPayload);
+    const camId = camCreated[0]?.id ?? camCreated.id;
+    log(`  Created camera: ${camId}`);
+
+    // Step 3: Delete pending record
+    await supa('DELETE', `pending_cameras?id=eq.${r.id}`, null, { 'Prefer': '' });
+    log(`  Deleted pending record ${r.id}.`, 'log-info');
+    log(`Approved: "${r.operator_name}" is now live.`, 'log-info');
+
+    card.remove();
+    // Update count
+    const countEl = document.getElementById('pending-count');
+    const n = parseInt(countEl.textContent) - 1;
+    countEl.textContent = `${n} submission${n !== 1 ? 's' : ''}`;
+  } catch (e) {
+    log(`Approve failed: ${e.message}`, 'log-error');
+    if (e.data) log(`  Detail: ${JSON.stringify(e.data)}`, 'log-error');
+    approveBtn.disabled = rejectBtn.disabled = false;
+    approveBtn.textContent = '✓ Approve';
+    alert(`Approve failed: ${e.message}\n\nSee the log for details. You may need to check your Supabase table schema.`);
+  }
+}
+
+async function rejectPending(r, card) {
+  if (!confirm(`Reject and delete "${r.operator_name}"?\nThis cannot be undone.`)) return;
+  const rejectBtn = card.querySelector('.btn-reject');
+  rejectBtn.disabled = true;
+  rejectBtn.textContent = 'Deleting…';
+  log(`Rejecting pending ID ${r.id}…`);
+  try {
+    await supa('DELETE', `pending_cameras?id=eq.${r.id}`, null, { 'Prefer': '' });
+    log(`Rejected and deleted pending ID ${r.id}.`, 'log-warn');
+    card.remove();
+    const countEl = document.getElementById('pending-count');
+    const n = parseInt(countEl.textContent) - 1;
+    countEl.textContent = `${n} submission${n !== 1 ? 's' : ''}`;
+  } catch (e) {
+    log(`Reject failed: ${e.message}`, 'log-error');
+    rejectBtn.disabled = false;
+    rejectBtn.textContent = '✗ Reject';
+  }
+}
+
+// ── Live cameras ──────────────────────────────────────────────────────────────
+document.getElementById('btn-search-cameras').onclick = searchCameras;
+document.getElementById('btn-load-all-cameras').onclick = () => loadCameras('');
+document.getElementById('camera-search').addEventListener('keydown', e => {
+  if (e.key === 'Enter') searchCameras();
+});
+
+function searchCameras() {
+  const q = document.getElementById('camera-search').value.trim();
+  loadCameras(q);
+}
+
+async function loadCameras(q) {
+  const wrap = document.getElementById('cameras-table-wrap');
+  wrap.innerHTML = '<p class="no-data">Loading…</p>';
+  log(`Loading cameras${q ? ` matching "${q}"` : ''}…`);
+  try {
+    // Join with operators via embedded resource
+    let path = 'cameras?select=id,lat,lng,location_desc,operator_id,operators(name,ico_reg,privacy_email)&order=id.asc&limit=200';
+    if (q) {
+      // Supabase doesn't support full-text across joins easily — filter on location_desc
+      path += `&location_desc=ilike.*${encodeURIComponent(q)}*`;
+    }
+    const rows = await supa('GET', path);
+    log(`Loaded ${rows.length} camera(s).`, 'log-info');
+    renderCamerasTable(rows, wrap);
+  } catch (e) {
+    // Try without join in case operators table name/relationship differs
+    log(`Join failed (${e.message}), retrying without operator join…`, 'log-warn');
+    try {
+      let path = 'cameras?select=id,lat,lng,location_desc,operator_id&order=id.asc&limit=200';
+      if (q) path += `&location_desc=ilike.*${encodeURIComponent(q)}*`;
+      const rows = await supa('GET', path);
+      log(`Loaded ${rows.length} camera(s) (no operator names — check FK name).`, 'log-warn');
+      renderCamerasTable(rows, wrap);
+    } catch (e2) {
+      log(`Failed to load cameras: ${e2.message}`, 'log-error');
+      wrap.innerHTML = `<p class="no-data" style="color:#dc2626">Error: ${e2.message}</p>`;
+    }
+  }
+}
+
+function renderCamerasTable(rows, wrap) {
+  if (rows.length === 0) {
+    wrap.innerHTML = '<p class="no-data">No cameras found.</p>'; return;
+  }
+  const hasOp = rows[0]?.operators;
+  wrap.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>ID</th><th>Location</th><th>Lat</th><th>Lng</th>
+        ${hasOp ? '<th>Operator</th><th>ICO</th>' : '<th>Operator ID</th>'}
+        <th>Actions</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r => `<tr>
+          <td style="font-size:0.75em;color:#94a3b8">${r.id}</td>
+          <td>${esc(r.location_desc || '—')}</td>
+          <td>${r.lat ?? '—'}</td><td>${r.lng ?? '—'}</td>
+          ${hasOp
+            ? `<td>${esc(r.operators?.name || '—')}</td><td>${esc(r.operators?.ico_reg || '—')}</td>`
+            : `<td>${r.operator_id || '—'}</td>`}
+          <td><button class="btn btn-danger" style="padding:3px 8px;font-size:0.78em"
+                      onclick="deleteCamera('${r.id}', this)">Delete</button></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <p style="font-size:0.78em;color:#94a3b8;margin-top:6px">
+      Showing ${rows.length} record${rows.length !== 1 ? 's' : ''} (max 200).
+    </p>`;
+}
+
+async function deleteCamera(id, btn) {
+  if (!confirm(`Delete camera ${id}?\nThis is permanent.`)) return;
+  btn.disabled = true;
+  btn.textContent = '…';
+  log(`Deleting camera ${id}…`);
+  try {
+    await supa('DELETE', `cameras?id=eq.${id}`, null, { 'Prefer': '' });
+    log(`Deleted camera ${id}.`, 'log-warn');
+    btn.closest('tr').remove();
+  } catch (e) {
+    log(`Delete failed: ${e.message}`, 'log-error');
+    btn.disabled = false; btn.textContent = 'Delete';
+  }
+}
+
+// ── Operators ─────────────────────────────────────────────────────────────────
+document.getElementById('btn-load-operators').onclick = loadOperators;
+
+async function loadOperators() {
+  const wrap = document.getElementById('operators-table-wrap');
+  wrap.innerHTML = '<p class="no-data">Loading…</p>';
+  log('Loading operators…');
+  try {
+    const rows = await supa('GET', 'operators?order=name.asc&limit=500');
+    document.getElementById('operators-count').textContent =
+      `${rows.length} operator${rows.length !== 1 ? 's' : ''}`;
+    log(`Loaded ${rows.length} operator(s).`, 'log-info');
+    renderOperatorsTable(rows, wrap);
+  } catch (e) {
+    log(`Failed to load operators: ${e.message}`, 'log-error');
+    wrap.innerHTML = `<p class="no-data" style="color:#dc2626">Error: ${e.message}</p>`;
+  }
+}
+
+function renderOperatorsTable(rows, wrap) {
+  if (rows.length === 0) {
+    wrap.innerHTML = '<p class="no-data">No operators found.</p>'; return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Name</th><th>ICO Reg</th><th>Privacy Email</th><th>Address</th><th>ID</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r => `<tr>
+          <td><strong>${esc(r.name || '—')}</strong></td>
+          <td>${esc(r.ico_reg || '—')}</td>
+          <td>${esc(r.privacy_email || '—')}</td>
+          <td style="max-width:200px;font-size:0.82em">${esc(r.postal_address || '—')}</td>
+          <td style="font-size:0.72em;color:#94a3b8">${r.id}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <p style="font-size:0.78em;color:#94a3b8;margin-top:6px">
+      ${rows.length} operator${rows.length !== 1 ? 's' : ''} total.
+    </p>`;
+}
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
