@@ -34,26 +34,29 @@ self.addEventListener('activate', (e) => {
     self.clients.claim();
 });
 
+const PRECACHE_URLS = new Set(PRECACHE.map(p => new URL(p, self.location).href));
+
 self.addEventListener('fetch', (e) => {
     // Let external API calls (Nominatim, Supabase) go through normally
     const url = new URL(e.request.url);
     if (url.origin !== location.origin) return;
 
+    // Network-first: always fetch from server so updates reach users immediately.
+    // Only cache known app assets (PRECACHE list) — prevents cache poisoning.
+    // Cache is used only as offline fallback.
     e.respondWith(
-        caches.match(e.request).then(cached => {
-            if (cached) return cached;
-            return fetch(e.request).then(resp => {
-                // Cache successful GET responses for app assets
-                if (e.request.method === 'GET' && resp.status === 200) {
-                    const clone = resp.clone();
-                    caches.open(CACHE).then(c => c.put(e.request, clone));
-                }
-                return resp;
-            }).catch(() => {
-                // Offline fallback for navigation
-                if (e.request.mode === 'navigate')
-                    return caches.match('./index.html');
-            });
-        })
+        fetch(e.request).then(resp => {
+            if (e.request.method === 'GET' && resp.status === 200
+                    && PRECACHE_URLS.has(url.href)) {
+                const clone = resp.clone();
+                caches.open(CACHE).then(c => c.put(e.request, clone));
+            }
+            return resp;
+        }).catch(() =>
+            caches.match(e.request).then(cached => {
+                if (cached) return cached;
+                if (e.request.mode === 'navigate') return caches.match('./index.html');
+            })
+        )
     );
 });
