@@ -3,15 +3,22 @@
 Read ico_filtered.json and import operator locations from OpenStreetMap
 into the Supabase database.
 
-Uses the Overpass API to find premises in Great Britain for each operator,
-then upserts operators and cameras to Supabase.
+For each operator, the script:
+  1. Auto-derives an OSM search name from the ICO organisation name
+     (stripping corporate suffixes like "Limited", "PLC", "Group", etc.)
+  2. Queries OSM Overpass for premises in GB tagged with that brand/name
+  3. Upserts the operator and camera records to Supabase
+
+A small overrides dict handles cases where the trading name differs from
+the corporate name (e.g. "Whitbread Group" -> "Premier Inn").
 
 Usage:
     cd tools
     py import_osm.py                    # all operators in ico_filtered.json
-    py import_osm.py --only aldi        # single operator by slug
+    py import_osm.py --only aldi-stores # single operator by slug
     py import_osm.py --dry-run          # preview without writing to Supabase
-    py import_osm.py --dry-run --only asda
+    py import_osm.py --dry-run --only asda-stores
+    py import_osm.py --min-results 5    # skip operators with fewer than 5 hits
 
 Service role key page: https://supabase.com/dashboard/project/lyijydkwitjxbcxurkep/settings/api
 """
@@ -28,138 +35,176 @@ import requests
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SUPABASE_URL = "https://lyijydkwitjxbcxurkep.supabase.co"
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+# Multiple Overpass endpoints for failover
+OVERPASS_URLS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+]
 OVERPASS_DELAY = 1.0  # seconds between Overpass queries
 UPSERT_BATCH = 500
 
-# ── OSM brand/name mapping ────────────────────────────────────────────────────
-# Maps operator slugs to Overpass search strategies.
-# "brand" uses brand:wikidata or brand tag; "name" uses name tag.
-# "amenity"/"shop" constrains the OSM feature type.
-#
-# Only operators with an entry here will be queried.
-# Add new mappings as needed — operators without a mapping are skipped.
+# ── Corporate suffixes to strip ───────────────────────────────────────────────
+# Order matters: longer/more specific first, applied repeatedly.
+STRIP_SUFFIXES = [
+    "supermarkets", "restaurants", "holdings", "international",
+    "professional services", "services", "solutions",
+    "stores", "retail", "foods", "foodstore",
+    "great britain", "cinemas", "entertainment", "hotels",
+    "limited", "ltd", "plc", "llp", "inc",
+    "group", "uk", "corp", "corporation",
+    "& co", "and co",
+]
 
-OSM_QUERIES = {
-    # ── Supermarkets ──────────────────────────────────────────────────────────
-    "tesco-stores":     {"brand": "Tesco",              "shop": "supermarket"},
-    "tesco":            {"brand": "Tesco",              "shop": "supermarket"},
-    "asda-stores":      {"brand": "Asda",               "shop": "supermarket"},
-    "asda-group":       {"brand": "Asda",               "shop": "supermarket"},
-    "asda":             {"brand": "Asda",               "shop": "supermarket"},
-    "sainsburys-supermarkets": {"brand": "Sainsbury's",  "shop": "supermarket"},
-    "sainsburys":       {"brand": "Sainsbury's",         "shop": "supermarket"},
-    "wm-morrison-supermarkets": {"brand": "Morrisons",  "shop": "supermarket"},
-    "morrisons":        {"brand": "Morrisons",          "shop": "supermarket"},
-    "aldi-stores":      {"brand": "Aldi",               "shop": "supermarket"},
-    "aldi":             {"brand": "Aldi",               "shop": "supermarket"},
-    "lidl-great-britain": {"brand": "Lidl",             "shop": "supermarket"},
-    "lidl":             {"brand": "Lidl",               "shop": "supermarket"},
-    "marks-and-spencer": {"brand": "Marks & Spencer",   "shop": "supermarket"},
-    "waitrose":         {"brand": "Waitrose",           "shop": "supermarket"},
-    "iceland-foods":    {"brand": "Iceland",            "shop": "supermarket"},
-    "co-operative-group": {"brand": "Co-op",            "shop": "supermarket"},
-
-    # ── Retail ────────────────────────────────────────────────────────────────
-    "argos":            {"brand": "Argos",              "shop": "general"},
-    "primark":          {"brand": "Primark",            "shop": "clothes"},
-    "john-lewis":       {"brand": "John Lewis",         "shop": "department_store"},
-    "bq":               {"brand": "B&Q",                "shop": "doityourself"},
-    "homebase":         {"brand": "Homebase",           "shop": "doityourself"},
-    "ikea":             {"brand": "IKEA",               "shop": "furniture"},
-    "next":             {"brand": "Next",               "shop": "clothes"},
-    "tk-maxx":          {"brand": "TK Maxx",            "shop": "clothes"},
-    "poundland":        {"brand": "Poundland",          "shop": "variety_store"},
-    "superdrug":        {"brand": "Superdrug",          "shop": "chemist"},
-    "boots":            {"brand": "Boots",              "shop": "chemist"},
-    "currys":           {"brand": "Currys",             "shop": "electronics"},
-    "sports-direct":    {"brand": "Sports Direct",      "shop": "sports"},
-    "jd-sports":        {"brand": "JD Sports",          "shop": "sports"},
-    "halfords":         {"brand": "Halfords",           "shop": "car_parts"},
-    "home-bargains":    {"brand": "Home Bargains",      "shop": "variety_store"},
-
-    # ── Food & drink ──────────────────────────────────────────────────────────
-    "mcdonalds-restaurants": {"brand": "McDonald's",    "amenity": "fast_food"},
-    "mcdonalds":        {"brand": "McDonald's",         "amenity": "fast_food"},
-    "greggs":           {"brand": "Greggs",             "shop": "bakery"},
-    "costa":            {"brand": "Costa Coffee",       "amenity": "cafe"},
-    "starbucks-coffee":  {"brand": "Starbucks",         "amenity": "cafe"},
-    "starbucks":        {"brand": "Starbucks",          "amenity": "cafe"},
-    "pret-a-manger":    {"brand": "Pret A Manger",      "amenity": "cafe"},
-    "kfc":              {"brand": "KFC",                "amenity": "fast_food"},
-    "kfc-great-britain": {"brand": "KFC",               "amenity": "fast_food"},
-    "subway":           {"brand": "Subway",             "amenity": "fast_food"},
-    "nandos":           {"brand": "Nando's",            "amenity": "restaurant"},
-    "jd-wetherspoon":   {"brand": "Wetherspoons",       "amenity": "pub"},
-    "wetherspoon":      {"brand": "Wetherspoons",       "amenity": "pub"},
-    "pizza-hut":        {"brand": "Pizza Hut",          "amenity": "restaurant"},
-    "dominos-pizza":    {"brand": "Domino's",           "amenity": "fast_food"},
-    "burger-king":      {"brand": "Burger King",        "amenity": "fast_food"},
-
-    # ── Petrol ────────────────────────────────────────────────────────────────
-    "shell":            {"brand": "Shell",              "amenity": "fuel"},
-    "bp":               {"brand": "BP",                 "amenity": "fuel"},
-    "esso":             {"brand": "Esso",               "amenity": "fuel"},
-    "texaco":           {"brand": "Texaco",             "amenity": "fuel"},
-
-    # ── Parking ───────────────────────────────────────────────────────────────
-    "national-car-parks": {"brand": "NCP",              "amenity": "parking"},
-
-    # ── Leisure ───────────────────────────────────────────────────────────────
-    "odeon-cinemas":    {"brand": "Odeon",              "amenity": "cinema"},
-    "cineworld":        {"brand": "Cineworld",          "amenity": "cinema"},
-    "vue-entertainment": {"brand": "Vue",              "amenity": "cinema"},
-    "puregym":          {"brand": "PureGym",            "leisure": "fitness_centre"},
-    "the-gym-group":    {"brand": "The Gym",            "leisure": "fitness_centre"},
-
-    # ── Hotels ────────────────────────────────────────────────────────────────
-    "whitbread-group":  {"brand": "Premier Inn",        "tourism": "hotel"},
-    "premier-inn":      {"brand": "Premier Inn",        "tourism": "hotel"},
-    "travelodge-hotels": {"brand": "Travelodge",       "tourism": "hotel"},
-    "travelodge":       {"brand": "Travelodge",        "tourism": "hotel"},
+# ── Name overrides ────────────────────────────────────────────────────────────
+# Slug -> OSM brand name, for cases where the corporate name doesn't match
+# the consumer-facing brand in OSM. Only truly necessary mismatches go here.
+BRAND_OVERRIDES = {
+    # Corporate parent != trading brand
+    "whitbread-group":              "Premier Inn",
+    "whitbread":                    "Premier Inn",
+    "telefonica-uk":                "O2",
+    "telefonica":                   "O2",
+    "tjx-uk":                       "TK Maxx",
+    "tjx":                          "TK Maxx",
+    "dixons-carphone":              "Currys",
+    "dixons":                       "Currys",
+    "ee":                           "EE",
+    "three-uk":                     "Three",
+    "t-j-morris":                   "Home Bargains",
+    "frasers-group":                "Sports Direct",
+    "subway-realty":                "Subway",
+    "five-guys-jv":                 "Five Guys",
+    # Name divergence (actual ICO slugs)
+    "wm-morrison-supermarkets":     "Morrisons",
+    "wm-morrison":                  "Morrisons",
+    "sainsburys-supermarkets":      "Sainsbury's",
+    "sainsburys":                   "Sainsbury's",
+    "marks-and-spencer-group":      "Marks & Spencer",
+    "marks-and-spencer":            "Marks & Spencer",
+    "cooperative-group":            "Co-op",
+    "co-operative-group":           "Co-op",
+    "central-england-cooperative":  "Co-op",
+    "the-midcounties-cooperative":  "Co-op",
+    "the-southern-cooperative":     "Co-op",
+    "iceland-foods":                "Iceland",
+    "national-car-parks":           "NCP",
+    "j-d-wetherspoon":              "Wetherspoon",
+    "jd-wetherspoon":               "Wetherspoon",
+    "dominos-pizza-uk-ireland":     "Domino's",
+    "dominos-pizza-group":          "Domino's",
+    "dominos-pizza":                "Domino's",
+    "costa":                        "Costa Coffee",
+    "starbucks-coffee-company":     "Starbucks",
+    "starbucks-coffee":             "Starbucks",
+    "mcdonalds-restaurants":        "McDonald's",
+    "mcdonalds":                    "McDonald's",
+    "nandos-chickenland":           "Nando's",
+    "nandos":                       "Nando's",
+    "pret-a-manger-europe":         "Pret A Manger",
+    "pret-a-manger":                "Pret A Manger",
+    "superdrug-stores":             "Superdrug",
+    "primark-stores":               "Primark",
+    "pure-gym":                     "PureGym",
+    "cineworld-cinemas":            "Cineworld",
+    "odeon-cinemas":                "Odeon",
+    "jd-sports-fashion":            "JD Sports",
+    "jd-sports":                    "JD Sports",
+    "sports-direct-international":  "Sports Direct",
+    "sports-direct":                "Sports Direct",
+    "the-gym-group":                "The Gym",
+    "the-gym":                      "The Gym",
+    "vue-entertainment":            "Vue",
+    "virgin-active":                "Virgin Active",
+    "virgin-money":                 "Virgin Money",
+    "nationwide-building-society":  "Nationwide",
+    "bt-group":                     "BT",
+    "bp-oil":                       "BP",
+    "esso-petroleum-company":       "Esso",
+    "esso-petroleum":               "Esso",
+    "shell-uk":                     "Shell",
 }
 
+# ── Slugs to skip ─────────────────────────────────────────────────────────────
+# Operators that won't have meaningful physical premises in OSM
+# (holding companies, financial/insurance entities, online-only, etc.)
+SKIP_SLUGS = set()
+# Populated at runtime if needed; can also be loaded from a file.
 
-def build_overpass_query(cfg):
-    """Build an Overpass QL query to find branded premises in Great Britain."""
-    brand = cfg["brand"]
 
-    # Determine which tag to filter on (shop, amenity, leisure, tourism)
-    type_filters = []
-    for tag in ("shop", "amenity", "leisure", "tourism"):
-        if tag in cfg:
-            type_filters.append(f'["{tag}"="{cfg[tag]}"]')
+def clean_name_for_search(name):
+    """
+    Derive an OSM search name from an ICO corporate name.
 
-    # If no type filter, just search by brand name
-    if not type_filters:
-        type_filters = [""]
+    "ALDI Stores Limited" -> "Aldi"
+    "Greggs PLC"          -> "Greggs"
+    "B&Q Limited"         -> "B&Q"
+    """
+    s = name.strip()
 
-    # Build query parts for nodes and ways
-    # Use exact match on brand tag (fast), regex only on name tag (fallback)
-    parts = []
-    for tf in type_filters:
-        # Exact brand match (fast, covers most mapped chains)
-        parts.append(f'  nw["brand"="{brand}"]{tf}(area.gb);')
-        # Regex name match (catches entries tagged with name but no brand tag)
-        parts.append(f'  nw["name"~"^{re.escape(brand)}$",i]{tf}(area.gb);')
+    # Remove parenthetical content: "Next (Retail) Limited" -> "Next Limited"
+    s = re.sub(r"\s*\([^)]*\)", "", s)
+
+    # Strip corporate suffixes (case-insensitive, repeated until stable)
+    prev = None
+    while prev != s:
+        prev = s
+        for suffix in STRIP_SUFFIXES:
+            pattern = re.compile(r"\s+" + re.escape(suffix) + r"$", re.IGNORECASE)
+            s = pattern.sub("", s)
+        s = s.strip().rstrip(",").strip()
+
+    # Title-case if ALL CAPS, preserve mixed case otherwise
+    if s == s.upper() and len(s) > 3:
+        s = s.title()
+
+    return s.strip()
+
+
+def build_overpass_query(brand_name):
+    """
+    Build an Overpass QL query to find branded/named premises in GB.
+    Uses regex on both brand and name tags (case-insensitive) to handle
+    minor variations like "Wetherspoon" vs "Wetherspoons".
+    No type constraint -- we want everything tagged with this brand.
+    """
+    regex_escaped = re.escape(brand_name).replace('"', '\\"')
+
+    # Allow optional trailing "s" and "'s" for pluralisation mismatches
+    pattern = f"^{regex_escaped}('?s)?$"
 
     query = (
         "[out:json][timeout:180];\n"
-        "area[\"ISO3166-1\"=\"GB\"]->.gb;\n"
+        f'area["ISO3166-1"="GB"]->.gb;\n'
         "(\n"
-        + "\n".join(parts)
-        + "\n);\n"
+        f'  nw["brand"~"{pattern}",i](area.gb);\n'
+        f'  nw["name"~"{pattern}",i](area.gb);\n'
+        ");\n"
         "out center;"
     )
     return query
 
 
-def query_overpass(query):
-    """Send a query to the Overpass API and return the elements."""
-    resp = requests.post(OVERPASS_URL, data={"data": query}, timeout=200)
-    resp.raise_for_status()
-    data = resp.json()
-    return data.get("elements", [])
+def query_overpass(query, retries=2):
+    """Send a query to the Overpass API with failover across endpoints."""
+    last_err = None
+    for attempt in range(retries + 1):
+        url = OVERPASS_URLS[attempt % len(OVERPASS_URLS)]
+        try:
+            resp = requests.post(url, data={"data": query}, timeout=200)
+            resp.raise_for_status()
+            data = resp.json()
+
+            if "remark" in data and "runtime error" in data["remark"]:
+                raise RuntimeError(f"Overpass error: {data['remark']}")
+
+            return data.get("elements", [])
+        except (requests.RequestException, RuntimeError) as e:
+            last_err = e
+            if attempt < retries:
+                wait = 5 * (attempt + 1)
+                print(f"  Retry {attempt+1}/{retries} in {wait}s ({e})...")
+                time.sleep(wait)
+    raise last_err
 
 
 def elements_to_cameras(elements, slug):
@@ -220,6 +265,37 @@ def elements_to_cameras(elements, slug):
     return cameras
 
 
+def get_search_name(op):
+    """
+    Get the OSM search name for an operator.
+    Uses BRAND_OVERRIDES if available, otherwise auto-derives from ICO name.
+    Also checks trading_names for a better match.
+    """
+    slug = op["slug"]
+
+    # Explicit override takes priority
+    if slug in BRAND_OVERRIDES:
+        return BRAND_OVERRIDES[slug]
+
+    # Try cleaning the organisation name
+    cleaned = clean_name_for_search(op["name"])
+
+    # If trading names are available and shorter/cleaner, prefer them
+    trading = op.get("trading_names") or ""
+    if trading:
+        # Trading names are pipe-separated in ICO data
+        first_trading = trading.split("|")[0].strip().rstrip(".")
+        if first_trading:
+            cleaned_trading = clean_name_for_search(first_trading)
+            # Prefer trading name if it's meaningfully different and shorter
+            if (cleaned_trading and
+                    len(cleaned_trading) < len(cleaned) and
+                    cleaned_trading.lower() != cleaned.lower()):
+                return cleaned_trading
+
+    return cleaned
+
+
 # ── Supabase helpers ──────────────────────────────────────────────────────────
 
 def supa_headers(key):
@@ -266,10 +342,7 @@ def upsert_cameras(cameras, key, dry_run=False):
         if cameras:
             print(f"    First: {cameras[0]['id']} at {cameras[0]['lat']},{cameras[0]['lng']}")
             print(f"    Last:  {cameras[-1]['id']} at {cameras[-1]['lat']},{cameras[-1]['lng']}")
-        return 0, len(cameras)
-
-    new_count = 0
-    skip_count = 0
+        return
 
     for i in range(0, len(cameras), UPSERT_BATCH):
         batch = cameras[i : i + UPSERT_BATCH]
@@ -287,12 +360,8 @@ def upsert_cameras(cameras, key, dry_run=False):
                   f"{resp.status_code} {resp.text[:200]}")
             continue
 
-        result = resp.json()
-        new_count += len(result)
         batch_end = min(i + UPSERT_BATCH, len(cameras))
         print(f"  Upserted cameras {i+1}-{batch_end} of {len(cameras)}")
-
-    return new_count, skip_count
 
 
 def main():
@@ -307,6 +376,10 @@ def main():
                         help="Query OSM but don't write to Supabase")
     parser.add_argument("--input", default=None,
                         help="Path to filtered JSON (default: tools/ico_filtered.json)")
+    parser.add_argument("--min-results", type=int, default=0,
+                        help="Skip operators with fewer than N OSM results (default: 0)")
+    parser.add_argument("--show-names", action="store_true",
+                        help="Show derived search names and exit (no queries)")
     args = parser.parse_args()
 
     # Find input file
@@ -330,18 +403,28 @@ def main():
             print(f"ERROR: No operator with slug '{args.only}' found in {input_file}")
             sys.exit(1)
 
-    # Filter to operators that have OSM query mappings
-    queryable = [op for op in operators if op["slug"] in OSM_QUERIES]
-    skipped = [op for op in operators if op["slug"] not in OSM_QUERIES]
+    # Derive search names for all operators
+    for op in operators:
+        op["_search_name"] = get_search_name(op)
 
-    print(f"{len(queryable)} operators have OSM query mappings")
-    if skipped and not args.only:
-        print(f"{len(skipped)} operators skipped (no OSM mapping)")
+    # --show-names mode: just print the mapping and exit
+    if args.show_names:
+        print(f"\n{'Slug':<45} {'Search name':<30} {'ICO name'}")
+        print("-" * 110)
+        for op in operators:
+            override = " [override]" if op["slug"] in BRAND_OVERRIDES else ""
+            print(f"{op['slug']:<45} {op['_search_name']:<30} {op['name'][:35]}{override}")
+        return
+
+    # Filter out operators with very short/empty search names
+    queryable = [op for op in operators
+                 if len(op["_search_name"]) >= 2
+                 and op["slug"] not in SKIP_SLUGS]
+
+    print(f"{len(queryable)} operators to query")
 
     if not queryable:
-        print("\nNo operators to process. Add mappings to OSM_QUERIES in this script.")
-        if args.only:
-            print(f"Slug '{args.only}' needs a mapping in OSM_QUERIES dict.")
+        print("\nNo operators to process.")
         sys.exit(0)
 
     # Get Supabase key (unless dry run)
@@ -359,50 +442,59 @@ def main():
     # Process each operator
     total_cameras = 0
     total_operators = 0
+    no_results = []
 
     for i, op in enumerate(queryable):
         slug = op["slug"]
-        cfg = OSM_QUERIES[slug]
+        search_name = op["_search_name"]
 
-        print(f"\n[{i+1}/{len(queryable)}] {op['name']} (slug: {slug})")
+        print(f"\n[{i+1}/{len(queryable)}] {op['name']}")
+        print(f"  Search name: \"{search_name}\"")
 
         # Build and run Overpass query
-        query = build_overpass_query(cfg)
-        print(f"  Querying Overpass for brand='{cfg['brand']}'...")
+        query = build_overpass_query(search_name)
 
         try:
             elements = query_overpass(query)
-        except requests.RequestException as e:
-            print(f"  ERROR querying Overpass: {e}")
+        except (requests.RequestException, RuntimeError) as e:
+            print(f"  ERROR: {e}")
             if i < len(queryable) - 1:
-                print(f"  Waiting {OVERPASS_DELAY}s before next query...")
                 time.sleep(OVERPASS_DELAY)
             continue
 
         cameras = elements_to_cameras(elements, slug)
-        print(f"  Found {len(elements)} OSM elements -> {len(cameras)} camera records")
+        print(f"  {len(elements)} OSM elements -> {len(cameras)} cameras")
 
-        if not cameras:
+        if len(cameras) < args.min_results:
+            if cameras:
+                print(f"  Skipped (below --min-results {args.min_results})")
+            else:
+                no_results.append(slug)
             if i < len(queryable) - 1:
                 time.sleep(OVERPASS_DELAY)
             continue
 
         # Upsert to Supabase
         upsert_operator(op, key, dry_run=args.dry_run)
-        new, skipped_count = upsert_cameras(cameras, key, dry_run=args.dry_run)
+        upsert_cameras(cameras, key, dry_run=args.dry_run)
         total_cameras += len(cameras)
         total_operators += 1
 
         # Rate limit between Overpass queries
         if i < len(queryable) - 1:
-            print(f"  Waiting {OVERPASS_DELAY}s before next query...")
             time.sleep(OVERPASS_DELAY)
 
     # Summary
     print(f"\n{'='*60}")
-    print(f"Done. Processed {total_operators} operators, {total_cameras} cameras total.")
+    print(f"Done. {total_operators} operators, {total_cameras} cameras total.")
+    if no_results:
+        print(f"\n{len(no_results)} operators returned 0 results:")
+        for s in no_results[:20]:
+            print(f"  {s}")
+        if len(no_results) > 20:
+            print(f"  ... and {len(no_results) - 20} more")
     if args.dry_run:
-        print("(Dry run -- nothing was written to Supabase)")
+        print("\n(Dry run -- nothing was written to Supabase)")
 
 
 if __name__ == "__main__":
