@@ -93,7 +93,7 @@ BRAND_OVERRIDES = {
     "dominos-pizza-uk-ireland":     "Domino's",
     "dominos-pizza-group":          "Domino's",
     "dominos-pizza":                "Domino's",
-    "costa":                        "Costa Coffee",
+    "costa":                        "Costa",
     "starbucks-coffee-company":     "Starbucks",
     "starbucks-coffee":             "Starbucks",
     "mcdonalds-restaurants":        "McDonald's",
@@ -178,6 +178,7 @@ def build_overpass_query(brand_name):
         "(\n"
         f'  nw["brand"~"{pattern}",i](area.gb);\n'
         f'  nw["name"~"{pattern}",i](area.gb);\n'
+        f'  nw["operator"~"{pattern}",i](area.gb);\n'
         ");\n"
         "out center;"
     )
@@ -430,12 +431,14 @@ def main():
     # Get Supabase key (unless dry run)
     key = None
     if not args.dry_run:
-        key = getpass.getpass(
-            "Supabase service role key "
-            "(https://supabase.com/dashboard/project/lyijydkwitjxbcxurkep/settings/api): "
-        )
+        key = os.environ.get("SUPABASE_KEY", "").strip()
+        if not key:
+            key = getpass.getpass(
+                "Supabase service role key "
+                "(https://supabase.com/dashboard/project/lyijydkwitjxbcxurkep/settings/api): "
+            )
         if not key.strip():
-            print("ERROR: No key provided.")
+            print("ERROR: No key provided. Set SUPABASE_KEY env var or enter at prompt.")
             sys.exit(1)
         key = key.strip()
 
