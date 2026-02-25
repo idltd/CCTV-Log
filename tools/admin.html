@@ -88,6 +88,11 @@
   .sub-fields { display: grid; grid-template-columns: 140px 1fr; gap: 4px 12px; font-size: 0.85em; }
   .sub-fields .key { color: #64748b; font-weight: 600; }
   .sub-fields .val { word-break: break-word; }
+  .sub-fields input[type=text] {
+    width: 100%; padding: 4px 6px; border: 1px solid #e2e8f0; border-radius: 4px;
+    font-size: 0.85em; font-family: inherit; min-width: 0;
+  }
+  .sub-fields input[type=text]:focus { outline: 2px solid #2563eb; border-color: transparent; }
   .sub-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
   .badge {
     display: inline-block; font-size: 0.75em; padding: 2px 8px; border-radius: 99px;
@@ -337,25 +342,34 @@ function renderPending(rows) {
       </div>
       <div class="sub-body">
         <div class="sub-fields">
+          <span class="key">Operator</span>
+          <span class="val"><input type="text" class="edit-operator-name" value="${esc(r.operator_name || '')}"></span>
           <span class="key">Location</span>
-          <span class="val">${esc(r.location_desc || '—')}</span>
+          <span class="val"><input type="text" class="edit-location-desc" value="${esc(r.location_desc || '')}"></span>
           <span class="key">Lat / Lng</span>
           <span class="val">${r.lat ?? '—'}, ${r.lng ?? '—'}
             ${r.lat && r.lng
               ? `&nbsp;<a href="https://maps.google.com/?q=${r.lat},${r.lng}" target="_blank" rel="noopener">Map ↗</a>`
               : ''}</span>
           <span class="key">ICO Reg</span>
-          <span class="val">${esc(r.ico_reg || '—')}</span>
+          <span class="val"><input type="text" class="edit-ico-reg" value="${esc(r.ico_reg || '')}"></span>
           <span class="key">Email</span>
-          <span class="val">${esc(r.privacy_email || '—')}</span>
+          <span class="val"><input type="text" class="edit-privacy-email" value="${esc(r.privacy_email || '')}"></span>
           <span class="key">Address</span>
-          <span class="val">${esc(r.postal_address || '—')}</span>
+          <span class="val"><input type="text" class="edit-postal-address" value="${esc(r.postal_address || '')}"></span>
         </div>
         <div class="sub-actions">
           <button class="btn btn-success btn-approve" data-id="${r.id}">✓ Approve</button>
           <button class="btn btn-danger btn-reject"  data-id="${r.id}">✗ Reject</button>
         </div>
       </div>`;
+
+    // Update card title as operator name is edited
+    const nameInput = card.querySelector('.edit-operator-name');
+    const titleEl = card.querySelector('.sub-title');
+    nameInput.addEventListener('input', () => {
+      titleEl.textContent = nameInput.value || '(unnamed)';
+    });
 
     card.querySelector('.btn-approve').onclick = () => approvePending(r, card);
     card.querySelector('.btn-reject').onclick  = () => rejectPending(r, card);
@@ -364,28 +378,41 @@ function renderPending(rows) {
 }
 
 async function approvePending(r, card) {
-  if (!confirm(`Approve "${r.operator_name}" at ${r.location_desc}?\nThis will add it to the live camera registry.`)) return;
+  // Read edited values from inputs
+  const edited = {
+    operator_name: card.querySelector('.edit-operator-name').value.trim(),
+    location_desc: card.querySelector('.edit-location-desc').value.trim(),
+    ico_reg:       card.querySelector('.edit-ico-reg').value.trim(),
+    privacy_email: card.querySelector('.edit-privacy-email').value.trim(),
+    postal_address:card.querySelector('.edit-postal-address').value.trim(),
+    lat:           r.lat,
+    lng:           r.lng,
+  };
+
+  if (!edited.operator_name) { alert('Operator name is required.'); return; }
+
+  if (!confirm(`Approve "${edited.operator_name}" at ${edited.location_desc || '(no location)'}?\nThis will add it to the live camera registry.`)) return;
 
   const approveBtn = card.querySelector('.btn-approve');
   const rejectBtn  = card.querySelector('.btn-reject');
   approveBtn.disabled = rejectBtn.disabled = true;
   approveBtn.textContent = 'Approving…';
-  log(`Approving pending ID ${r.id} — "${r.operator_name}"…`);
+  log(`Approving pending ID ${r.id} — "${edited.operator_name}"…`);
 
   try {
     // Step 1: Find or create operator
     let operatorId;
     const existing = await supa('GET',
-      `operators?select=id&name=eq.${encodeURIComponent(r.operator_name)}&limit=1`);
+      `operators?select=id&name=eq.${encodeURIComponent(edited.operator_name)}&limit=1`);
     if (existing.length > 0) {
       operatorId = existing[0].id;
       log(`  Operator already exists: ${operatorId}`);
     } else {
       const created = await supa('POST', 'operators', {
-        name:           r.operator_name,
-        ico_reg:        r.ico_reg        || null,
-        privacy_email:  r.privacy_email  || null,
-        postal_address: r.postal_address || null,
+        name:           edited.operator_name,
+        ico_reg:        edited.ico_reg        || null,
+        privacy_email:  edited.privacy_email  || null,
+        postal_address: edited.postal_address || null,
       });
       operatorId = created[0]?.id ?? created.id;
       log(`  Created operator: ${operatorId}`);
@@ -393,12 +420,11 @@ async function approvePending(r, card) {
 
     // Step 2: Insert camera
     const camPayload = {
-      lat:           r.lat,
-      lng:           r.lng,
-      location_desc: r.location_desc || '',
+      lat:           edited.lat,
+      lng:           edited.lng,
+      location_desc: edited.location_desc || '',
       operator_id:   operatorId,
     };
-    // Include PostGIS geography if supported (generated columns will be ignored automatically)
     const camCreated = await supa('POST', 'cameras', camPayload);
     const camId = camCreated[0]?.id ?? camCreated.id;
     log(`  Created camera: ${camId}`);
@@ -406,7 +432,7 @@ async function approvePending(r, card) {
     // Step 3: Delete pending record
     await supa('DELETE', `pending_cameras?id=eq.${r.id}`, null, { 'Prefer': '' });
     log(`  Deleted pending record ${r.id}.`, 'log-info');
-    log(`Approved: "${r.operator_name}" is now live.`, 'log-info');
+    log(`Approved: "${edited.operator_name}" is now live.`, 'log-info');
 
     card.remove();
     // Update count
