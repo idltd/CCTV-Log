@@ -866,6 +866,10 @@ async function init() {
 
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./sw.js').catch(() => {});
+        // When a new SW takes over, reload so the new JS/CSS is actually used
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            window.location.reload();
+        });
     }
 }
 
