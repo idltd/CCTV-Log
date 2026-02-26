@@ -222,6 +222,24 @@ main {
     margin-bottom: 8px;
     cursor: pointer;
     transition: border-color 0.15s, box-shadow 0.15s;
+    position: relative;
+}
+.btn-remove-local {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    background: none;
+    border: none;
+    font-size: 1.3em;
+    line-height: 1;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.btn-remove-local:hover {
+    color: var(--error-text);
+    background: var(--error-bg);
 }
 .registry-item:hover    { border-color: var(--primary); }
 .registry-item.selected {

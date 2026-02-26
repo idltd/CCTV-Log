@@ -266,14 +266,28 @@ async function searchRegistry() {
         el.className = 'registry-item';
         el.tabIndex  = 0;
         el.innerHTML =
-            `<div class="op-name">${c.operator.name}</div>
+            `<div class="op-name">${escHtml(c.operator.name)}</div>
              <div class="op-meta">
-               ${Math.round(c.distance)} m away &middot; ${c.location_desc}
-               ${c.operator.ico_reg ? ' &middot; ICO: ' + c.operator.ico_reg : ''}
+               ${Math.round(c.distance)} m away &middot; ${escHtml(c.location_desc)}
+               ${c.operator.ico_reg ? ' &middot; ICO: ' + escHtml(c.operator.ico_reg) : ''}
                ${c.local ? ' &middot; <em>your entry</em>' : ''}
-             </div>`;
-        el.onclick   = () => selectCamera(c, el);
+             </div>
+             ${c.local ? '<button class="btn-remove-local" title="Remove this local entry">&times;</button>' : ''}`;
+        el.onclick   = (e) => { if (!e.target.classList.contains('btn-remove-local')) selectCamera(c, el); };
         el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') selectCamera(c, el); };
+        if (c.local) {
+            el.querySelector('.btn-remove-local').onclick = (e) => {
+                e.stopPropagation();
+                registry.removeLocal(c.id);
+                el.remove();
+                // If the removed entry was selected, clear selection
+                if (state.selectedCamera?.id === c.id) {
+                    state.selectedCamera = null;
+                    document.getElementById('selected-info').classList.add('hidden');
+                    document.getElementById('btn-step1-next').disabled = true;
+                }
+            };
+        }
         container.appendChild(el);
     });
 }

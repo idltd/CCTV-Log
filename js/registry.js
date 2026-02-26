@@ -102,6 +102,11 @@ export const registry = {
         return entry;
     },
 
+    removeLocal(id) {
+        const local = this._getLocal().filter(c => c.id !== id);
+        localStorage.setItem('cctv_local_cameras', JSON.stringify(local));
+    },
+
     _getLocal() {
         try { return JSON.parse(localStorage.getItem('cctv_local_cameras') || '[]'); }
         catch { return []; }
