@@ -97,3 +97,7 @@ Working PWA, live on GitHub Pages. Camera registry populated with ~30,000 locati
 - More operators (public sector: NHS, police, councils, universities)
 - Batch SAR workflows (multiple cameras in one incident)
 - Editable fields when approving submitted cameras in admin tool
+
+## Licence
+
+[AGPL-3.0-or-later](LICENSE) -- free to use, modify, and distribute. If you run this as a network service, you must make the source available to users.
